@@ -1,10 +1,10 @@
 {
-  "updatedAt": "2026-05-01T12:22:03.364Z",
+  "updatedAt": "2026-05-01T12:23:45.084Z",
   "createdAt": "2026-04-28T10:28:06.335Z",
   "id": "0rozTuxq7garvJw6",
   "name": "Backup",
   "description": null,
-  "active": false,
+  "active": true,
   "isArchived": false,
   "nodes": [
     {
@@ -75,9 +75,8 @@
         "triggerTimes": {
           "item": [
             {
-              "mode": "everyWeek",
-              "hour": 0,
-              "weekday": "0"
+              "mode": "everyX",
+              "value": 12
             }
           ]
         }
@@ -243,15 +242,19 @@
   },
   "settings": {
     "executionOrder": "v1",
-    "binaryMode": "separate"
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "UslOMwwiH98sBT9V",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
   },
   "staticData": null,
   "meta": null,
   "pinData": {},
-  "versionId": "40087617-3e74-4006-bf6e-02c651c78a86",
-  "activeVersionId": null,
-  "versionCounter": 103,
-  "triggerCount": 0,
+  "versionId": "8a227853-244d-41f8-9a66-122012a8b603",
+  "activeVersionId": "8a227853-244d-41f8-9a66-122012a8b603",
+  "versionCounter": 110,
+  "triggerCount": 1,
   "tags": [],
   "shared": [
     {
@@ -273,7 +276,7 @@
     }
   ],
   "versionMetadata": {
-    "name": null,
-    "description": null
+    "name": "Version 8a227853",
+    "description": ""
   }
 }

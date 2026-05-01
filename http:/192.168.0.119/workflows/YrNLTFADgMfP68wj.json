@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-01T11:48:59.267Z",
+  "updatedAt": "2026-05-01T12:38:51.898Z",
   "createdAt": "2026-04-20T15:58:11.206Z",
   "id": "YrNLTFADgMfP68wj",
   "name": "Trello -> WhatsApp Evolution",
@@ -90,13 +90,12 @@
       "parameters": {
         "method": "POST",
         "url": "http://192.168.0.119:8282/message/sendText/ADDO%20v2",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "BD4878B34C2E-4462-8C8A-9F252FCA8257"
-            }
+            {}
           ]
         },
         "sendBody": true,
@@ -117,7 +116,13 @@
         0
       ],
       "id": "21c0bbc0-fd6b-46d3-beb8-2415cb91c724",
-      "name": "Evolution - Enviar"
+      "name": "Evolution - Enviar",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "0BTcqdurbeIAvpvG",
+          "name": "Header Auth account"
+        }
+      }
     }
   ],
   "connections": {
@@ -544,11 +549,13 @@
       "initialized": true
     }
   },
-  "meta": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
   "pinData": {},
-  "versionId": "a561b547-e385-4e7d-819a-503b5ce87036",
+  "versionId": "87ead008-296d-4690-85f1-3a8a9f8f40b7",
   "activeVersionId": null,
-  "versionCounter": 1044,
+  "versionCounter": 1066,
   "triggerCount": 1,
   "tags": [],
   "shared": [
