@@ -1,0 +1,517 @@
+{
+  "updatedAt": "2026-05-01T12:15:00.954Z",
+  "createdAt": "2026-04-30T10:32:02.652Z",
+  "id": "osPAUmWVpJyppaTo",
+  "name": "PDF Preflight - MinIO Entrada",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.0.119:8001/analyze",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "file"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9b289fd7-b6b7-4330-9e4f-f04da4a39cba",
+      "name": "HTTP Request - Analizar PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        208,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "XTn3BIG8CuCeF42M",
+          "name": "OpenAI / OCR / PDF API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const r = $json;\n\n// Recuperamos datos del evento de MinIO para poder mover luego el PDF original\nlet minioEvent = {};\ntry {\n  minioEvent = $('Code - Extraer evento MinIO').first().json || {};\n} catch (error) {\n  minioEvent = {};\n}\n\nconst originalKey = minioEvent.original_key || r.original_key || null;\nconst originalBucket = minioEvent.bucket || r.original_bucket || 'preflight-pdf';\n\nfunction esc(value) {\n  return String(value ?? '')\n    .replaceAll('&', '&amp;')\n    .replaceAll('<', '&lt;')\n    .replaceAll('>', '&gt;')\n    .replaceAll('\"', '&quot;');\n}\n\nfunction boolText(value) {\n  if (value === true) return 'Sí';\n  if (value === false) return 'No';\n  return 'No detectado';\n}\n\nfunction formatBox(box) {\n  if (!box) return 'No detectado';\n\n  const width = box.width_mm ?? 'N/D';\n  const height = box.height_mm ?? 'N/D';\n\n  return `${width} x ${height} mm`;\n}\n\nfunction boxDescription(name) {\n  const descriptions = {\n    MediaBox:\n      'Define el tamaño total físico de la página PDF. Suele ser el área más grande del documento.',\n    CropBox:\n      'Define el límite para el contenido de una página cuando se muestra o imprime.',\n    ArtBox:\n      'Define el contenido significativo de la página, incluido el espacio en blanco.',\n    TrimBox:\n      'Define las dimensiones finales de la página después del recorte.',\n    BleedBox:\n      'Define la ruta de recorte cuando la página se imprime profesionalmente para permitir el recorte y plegado del papel. Las marcas de impresión pueden quedar fuera del área de sangrado.',\n  };\n\n  return descriptions[name] || 'Sin descripción.';\n}\n\nconst filename = r.filename || minioEvent.filename || 'documento.pdf';\nconst baseName = filename.replace(/\\.pdf$/i, '');\n\nconst status = r.result?.status || r.status || 'DESCONOCIDO';\nconst issues = r.result?.issues || r.issues || [];\n\nconst pages = r.pdfinfo?.pages ?? 'No detectado';\nconst encrypted = r.pdfinfo?.encrypted ?? 'No detectado';\n\n// Cajas PDF\nconst boxes = r.pdfinfo?.boxes || {};\n\nconst mediaBox = boxes.MediaBox || null;\nconst cropBox = boxes.CropBox || null;\nconst bleedBox = boxes.BleedBox || null;\nconst trimBox = boxes.TrimBox || null;\nconst artBox = boxes.ArtBox || null;\n\n// Tamaño principal en milímetros\nconst pageSize = r.pdfinfo?.page_size_mm || {};\n\nconst pageWidth = pageSize.width ?? trimBox?.width_mm ?? mediaBox?.width_mm ?? null;\nconst pageHeight = pageSize.height ?? trimBox?.height_mm ?? mediaBox?.height_mm ?? null;\n\nlet pageSizeSource = pageSize.source || null;\n\nif (!pageSizeSource) {\n  if (trimBox) {\n    pageSizeSource = 'TrimBox';\n  } else if (mediaBox) {\n    pageSizeSource = 'MediaBox';\n  } else {\n    pageSizeSource = 'No detectado';\n  }\n}\n\n// Sangre\nconst bleed = r.bleed || {};\nconst bleedDeclared = bleed.bleed_declared;\nconst bleedEstimated = bleed.bleed_estimated_mm ?? 0;\nconst bleedMm = bleed.bleed_mm || {};\n\n// Color / ICC\nconst colorProfile = r.color_profile || {};\nconst profileDescription = colorProfile.profile_description || 'No detectado';\nconst profileType = colorProfile.profile_type || 'No detectado';\n\n// Cobertura de tinta\nconst ink = r.ink_coverage || {};\nconst inkPages = ink.pages || [];\nconst highInkPages = ink.high_total_ink_pages_over_300 || [];\n\nconst firstInkPage = inkPages[0] || {};\n\nconst c = firstInkPage.c != null ? Math.round(firstInkPage.c * 10000) / 100 : null;\nconst m = firstInkPage.m != null ? Math.round(firstInkPage.m * 10000) / 100 : null;\nconst y = firstInkPage.y != null ? Math.round(firstInkPage.y * 10000) / 100 : null;\nconst k = firstInkPage.k != null ? Math.round(firstInkPage.k * 10000) / 100 : null;\n\nconst totalInk = firstInkPage.total_ink_percent_estimated ?? null;\n\nconst issuesHtml = issues.length\n  ? issues.map(issue => `<li>${esc(issue)}</li>`).join('\\n')\n  : '<li>No se han detectado incidencias según las reglas actuales.</li>';\n\nconst statusClass = status === 'OK' ? 'ok' : status === 'ERROR' ? 'error' : 'review';\n\nconst html = `<!doctype html>\n<html lang=\"es\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>Informe Preflight - ${esc(filename)}</title>\n  <style>\n    body {\n      font-family: Arial, sans-serif;\n      color: #222;\n      line-height: 1.45;\n      margin: 32px;\n    }\n\n    h1, h2 {\n      margin-bottom: 8px;\n    }\n\n    .status {\n      display: inline-block;\n      padding: 8px 14px;\n      border-radius: 6px;\n      font-weight: bold;\n      color: white;\n    }\n\n    .ok {\n      background: #198754;\n    }\n\n    .review {\n      background: #d97706;\n    }\n\n    .error {\n      background: #dc2626;\n    }\n\n    table {\n      border-collapse: collapse;\n      width: 100%;\n      margin: 12px 0 24px;\n    }\n\n    th, td {\n      border: 1px solid #ddd;\n      padding: 8px 10px;\n      text-align: left;\n      vertical-align: top;\n    }\n\n    th {\n      background: #f3f3f3;\n      width: 32%;\n    }\n\n    .small {\n      color: #666;\n      font-size: 12px;\n    }\n\n    .note {\n      color: #555;\n      font-size: 13px;\n    }\n  </style>\n</head>\n<body>\n  <h1>Informe Preflight PDF</h1>\n\n  <p><strong>Archivo:</strong> ${esc(filename)}</p>\n  <p><strong>Estado:</strong> <span class=\"status ${statusClass}\">${esc(status)}</span></p>\n\n  <h2>Resumen</h2>\n  <table>\n    <tr>\n      <th>Páginas</th>\n      <td>${esc(pages)}</td>\n    </tr>\n    <tr>\n      <th>Tamaño final</th>\n      <td>${pageWidth && pageHeight ? `${esc(pageWidth)} x ${esc(pageHeight)} mm` : 'No detectado'}</td>\n    </tr>\n    <tr>\n      <th>Fuente del tamaño</th>\n      <td>${esc(pageSizeSource)}</td>\n    </tr>\n    <tr>\n      <th>PDF cifrado/protegido</th>\n      <td>${esc(encrypted)}</td>\n    </tr>\n  </table>\n\n  <h2>Cajas PDF / Áreas de página</h2>\n  <table>\n    <tr>\n      <th>Caja PDF</th>\n      <th>Medida detectada</th>\n      <th>Descripción</th>\n    </tr>\n    <tr>\n      <td><strong>MediaBox</strong></td>\n      <td>${esc(formatBox(mediaBox))}</td>\n      <td>${esc(boxDescription('MediaBox'))}</td>\n    </tr>\n    <tr>\n      <td><strong>CropBox</strong></td>\n      <td>${esc(formatBox(cropBox))}</td>\n      <td>${esc(boxDescription('CropBox'))}</td>\n    </tr>\n    <tr>\n      <td><strong>ArtBox</strong></td>\n      <td>${esc(formatBox(artBox))}</td>\n      <td>${esc(boxDescription('ArtBox'))}</td>\n    </tr>\n    <tr>\n      <td><strong>TrimBox</strong></td>\n      <td>${esc(formatBox(trimBox))}</td>\n      <td>${esc(boxDescription('TrimBox'))}</td>\n    </tr>\n    <tr>\n      <td><strong>BleedBox</strong></td>\n      <td>${esc(formatBox(bleedBox))}</td>\n      <td>${esc(boxDescription('BleedBox'))}</td>\n    </tr>\n  </table>\n\n  <h2>Sangre</h2>\n  <table>\n    <tr>\n      <th>Sangre declarada</th>\n      <td>${boolText(bleedDeclared)}</td>\n    </tr>\n    <tr>\n      <th>Sangre estimada</th>\n      <td>${esc(bleedEstimated)} mm</td>\n    </tr>\n    <tr>\n      <th>Izquierda</th>\n      <td>${esc(bleedMm.left ?? 0)} mm</td>\n    </tr>\n    <tr>\n      <th>Derecha</th>\n      <td>${esc(bleedMm.right ?? 0)} mm</td>\n    </tr>\n    <tr>\n      <th>Superior</th>\n      <td>${esc(bleedMm.top ?? 0)} mm</td>\n    </tr>\n    <tr>\n      <th>Inferior</th>\n      <td>${esc(bleedMm.bottom ?? 0)} mm</td>\n    </tr>\n  </table>\n\n  <h2>Color e ICC</h2>\n  <table>\n    <tr>\n      <th>Perfil ICC</th>\n      <td>${esc(profileDescription)}</td>\n    </tr>\n    <tr>\n      <th>Tipo de perfil</th>\n      <td>${esc(profileType)}</td>\n    </tr>\n    <tr>\n      <th>Parece RGB</th>\n      <td>${boolText(colorProfile.seems_rgb)}</td>\n    </tr>\n    <tr>\n      <th>Parece perfil de impresión</th>\n      <td>${boolText(colorProfile.seems_print_profile)}</td>\n    </tr>\n  </table>\n\n  <h2>Cobertura de tinta aproximada</h2>\n  <table>\n    <tr>\n      <th>C</th>\n      <td>${c != null ? `${esc(c)}%` : 'No detectado'}</td>\n    </tr>\n    <tr>\n      <th>M</th>\n      <td>${m != null ? `${esc(m)}%` : 'No detectado'}</td>\n    </tr>\n    <tr>\n      <th>Y</th>\n      <td>${y != null ? `${esc(y)}%` : 'No detectado'}</td>\n    </tr>\n    <tr>\n      <th>K</th>\n      <td>${k != null ? `${esc(k)}%` : 'No detectado'}</td>\n    </tr>\n    <tr>\n      <th>Total tinta estimado</th>\n      <td>${totalInk != null ? `${esc(totalInk)}%` : 'No detectado'}</td>\n    </tr>\n    <tr>\n      <th>Páginas sobre 300%</th>\n      <td>${highInkPages.length ? esc(highInkPages.join(', ')) : 'No detectadas'}</td>\n    </tr>\n  </table>\n\n  <h2>Incidencias</h2>\n  <ul>\n    ${issuesHtml}\n  </ul>\n\n  <p class=\"small\">\n    Informe generado automáticamente. Este análisis es orientativo y debe validarse con herramientas profesionales de preflight para producción crítica.\n  </p>\n</body>\n</html>`;\n\nconst reportJsonText = JSON.stringify(r, null, 2);\n\nreturn {\n  json: {\n    filename,\n    status,\n    issues,\n    pages,\n\n    original_key: originalKey,\n    original_bucket: originalBucket,\n\n    page_size_mm: {\n      width: pageWidth,\n      height: pageHeight,\n      source: pageSizeSource,\n    },\n\n    pdf_boxes: {\n      MediaBox: {\n        size_mm: formatBox(mediaBox),\n        description: boxDescription('MediaBox'),\n      },\n      CropBox: {\n        size_mm: formatBox(cropBox),\n        description: boxDescription('CropBox'),\n      },\n      ArtBox: {\n        size_mm: formatBox(artBox),\n        description: boxDescription('ArtBox'),\n      },\n      TrimBox: {\n        size_mm: formatBox(trimBox),\n        description: boxDescription('TrimBox'),\n      },\n      BleedBox: {\n        size_mm: formatBox(bleedBox),\n        description: boxDescription('BleedBox'),\n      },\n    },\n\n    bleed_declared: bleedDeclared,\n    bleed_estimated_mm: bleedEstimated,\n\n    icc_profile: profileDescription,\n    icc_profile_type: profileType,\n\n    report_html_filename: `${baseName}_preflight.html`,\n    report_json_filename: `${baseName}_preflight.json`,\n\n    report_html: html,\n    report_json: reportJsonText,\n\n    analysis: r,\n  },\n  binary: {\n    report_html: {\n      data: Buffer.from(html, 'utf8').toString('base64'),\n      mimeType: 'text/html',\n      fileName: `${baseName}_preflight.html`,\n    },\n    report_json: {\n      data: Buffer.from(reportJsonText, 'utf8').toString('base64'),\n      mimeType: 'application/json',\n      fileName: `${baseName}_preflight.json`,\n    },\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        0
+      ],
+      "id": "64c8df1d-c637-48cc-87f2-ac2f3f3c42c2",
+      "name": "Code - Preparar informe"
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "preflight-pdf",
+        "fileName": "=informes/{{ $json.report_html_filename }}",
+        "binaryPropertyName": "report_html",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        656,
+        -192
+      ],
+      "id": "e8211909-ec4d-4bed-9f0c-2cd0b7502361",
+      "name": "Upload HTML",
+      "credentials": {
+        "s3": {
+          "id": "qrOXGDUvBfFXf89d",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "preflight-pdf",
+        "fileName": "=informes/{{ $json.report_json_filename }}",
+        "binaryPropertyName": "report_json",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        656,
+        0
+      ],
+      "id": "22770237-098e-47fb-aa0a-3bc4b38a20b0",
+      "name": "Upload JSON",
+      "credentials": {
+        "s3": {
+          "id": "qrOXGDUvBfFXf89d",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const informe = $('Code - Preparar informe').first().json;\nconst destino = $('Code - Preparar destino PDF').first().json;\n\nconst issues = informe.issues || [];\n\nconst issuesText = issues.length\n  ? issues.map(i => `- ${i}`).join('\\n')\n  : '- Sin incidencias detectadas según las reglas actuales.';\n\nconst htmlKey = `informes/${informe.report_html_filename}`;\nconst jsonKey = `informes/${informe.report_json_filename}`;\n\nconst whatsappMessage = `📄 Informe Preflight PDF\n\nArchivo: ${informe.filename}\nEstado: ${informe.status}\nPáginas: ${informe.pages}\nTamaño: ${informe.page_size_mm?.width ?? 'N/D'} x ${informe.page_size_mm?.height ?? 'N/D'} mm\nFuente tamaño: ${informe.page_size_mm?.source ?? 'N/D'}\n\nSangre declarada: ${informe.bleed_declared ? 'Sí' : 'No'}\nSangre estimada: ${informe.bleed_estimated_mm ?? 'N/D'} mm\n\nICC: ${informe.icc_profile}\nTipo ICC: ${informe.icc_profile_type}\n\nIncidencias:\n${issuesText}`;\n\nreturn {\n  json: {\n    status: 'preflight_completado',\n    filename: informe.filename,\n    preflight_status: informe.status,\n    pages: informe.pages,\n    page_size_mm: informe.page_size_mm,\n    bleed_declared: informe.bleed_declared,\n    bleed_estimated_mm: informe.bleed_estimated_mm,\n    icc_profile: informe.icc_profile,\n    icc_profile_type: informe.icc_profile_type,\n    issues,\n    minio: {\n      bucket: 'preflight-pdf',\n      html_key: htmlKey,\n      json_key: jsonKey,\n      moved_pdf_key: destino.destination_key,\n      original_key_deleted: destino.original_key,\n    },\n    whatsapp_message: whatsappMessage,\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1776,
+        0
+      ],
+      "id": "45cf2489-100c-473d-bfe4-88bdd0dc3722",
+      "name": "Code - Preparar resumen"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "minio-preflight",
+        "options": {
+          "responseCode": {
+            "values": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -464,
+        0
+      ],
+      "id": "720cc48a-4de9-48b1-8236-dab4ad78d987",
+      "name": "Webhook - Evento MinIO",
+      "webhookId": "3d800f4e-0759-41f9-8c1c-c2d480bce520"
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = [];\n\nfor (const item of items) {\n  const data = item.json || {};\n\n  // En n8n Webhook, el evento puede venir directamente o dentro de body\n  const payload = data.body || data;\n\n  const records = payload.Records || payload.records || [];\n\n  for (const record of records) {\n    let key =\n      record?.s3?.object?.key ||\n      record?.s3?.object?.name ||\n      record?.object?.key ||\n      record?.key ||\n      '';\n\n    key = decodeURIComponent(String(key).replace(/\\+/g, ' '));\n\n    const bucket =\n      record?.s3?.bucket?.name ||\n      record?.bucket?.name ||\n      'preflight-pdf';\n\n    const filename = key.split('/').pop() || '';\n\n    const isEntrada = key.startsWith('entrada/');\n    const isPdf = key.toLowerCase().endsWith('.pdf');\n\n    if (!key || !isEntrada || !isPdf) {\n      continue;\n    }\n\n    output.push({\n      json: {\n        ignore: false,\n        bucket,\n        original_key: key,\n        filename,\n        base_name: filename.replace(/\\.pdf$/i, ''),\n        event_name: record.eventName || record.event_name || null,\n      },\n    });\n  }\n}\n\nreturn output;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        0
+      ],
+      "id": "dffe89a9-f846-4a61-96ee-4f5f79b5cf72",
+      "name": "Code - Extraer evento MinIO"
+    },
+    {
+      "parameters": {
+        "bucketName": "preflight-pdf",
+        "fileKey": "={{ $json.original_key }}",
+        "binaryPropertyName": "file"
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        -16,
+        0
+      ],
+      "id": "1a6ceff4-be75-40c5-96cc-35d8028f5b78",
+      "name": "S3 - Descargar PDF",
+      "credentials": {
+        "s3": {
+          "id": "qrOXGDUvBfFXf89d",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const informe = $json;\n\nconst filename = informe.filename || 'documento.pdf';\nconst status = informe.status || 'ERROR';\nconst originalKey = informe.original_key;\n\nif (!originalKey) {\n  throw new Error('No se ha encontrado original_key. Revisa el nodo Code - Preparar informe.');\n}\n\nlet destinationFolder = 'error';\n\nif (status === 'OK') {\n  destinationFolder = 'ok';\n} else if (status === 'REVISAR') {\n  destinationFolder = 'revisar';\n} else {\n  destinationFolder = 'error';\n}\n\nreturn {\n  json: {\n    filename,\n    status,\n    original_key: originalKey,\n    destination_folder: destinationFolder,\n    destination_key: `${destinationFolder}/${filename}`,\n    bucket: informe.original_bucket || 'preflight-pdf',\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        192
+      ],
+      "id": "ccfb1168-297c-4442-abc1-5fc703695a79",
+      "name": "Code - Preparar destino PDF"
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "bucketName": "preflight-pdf",
+        "fileKey": "={{ $(\"Code - Preparar destino PDF\").first().json.original_key }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        1328,
+        192
+      ],
+      "id": "352d6496-c0be-4bcc-abd0-a8987df71dbb",
+      "name": "S3 - Borrar PDF de entrada",
+      "credentials": {
+        "s3": {
+          "id": "qrOXGDUvBfFXf89d",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        880,
+        -96
+      ],
+      "id": "a6640803-fc76-4071-ae4f-f7ab09b63c4d",
+      "name": "Merge - Informes subidos"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1552,
+        0
+      ],
+      "id": "3b495662-8bdb-4340-8d72-d3543b0f9718",
+      "name": "Merge - Todo completado"
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "preflight-pdf",
+        "fileName": "={{ $(\"Code - Preparar destino PDF\").first().json.destination_key }}",
+        "binaryPropertyName": "pdf_original",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        192
+      ],
+      "id": "837932d6-fde1-404f-b065-f12938943d3d",
+      "name": "S3 - Subir PDF a destino",
+      "credentials": {
+        "s3": {
+          "id": "qrOXGDUvBfFXf89d",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "bucketName": "preflight-pdf",
+        "fileKey": "={{ $json.original_key }}",
+        "binaryPropertyName": "pdf_original"
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        880,
+        192
+      ],
+      "id": "7690d23f-ca8a-4a97-bb4d-7f5b82dd9526",
+      "name": "S3 - Descargar PDF para mover",
+      "credentials": {
+        "s3": {
+          "id": "qrOXGDUvBfFXf89d",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.0.119:8282/message/sendText/ADDO%20v2",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    number: \"120363425302477785@g.us\",\n    text: $json.whatsapp_message\n  }\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2000,
+        0
+      ],
+      "id": "99336478-07bf-4b30-ac46-19901edf1f9f",
+      "name": "HTTP Request - Enviar WhatsApp",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "0BTcqdurbeIAvpvG",
+          "name": "Header Auth account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "HTTP Request - Analizar PDF": {
+      "main": [
+        [
+          {
+            "node": "Code - Preparar informe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Preparar informe": {
+      "main": [
+        [
+          {
+            "node": "Upload HTML",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Upload JSON",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code - Preparar destino PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload HTML": {
+      "main": [
+        [
+          {
+            "node": "Merge - Informes subidos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload JSON": {
+      "main": [
+        [
+          {
+            "node": "Merge - Informes subidos",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Code - Preparar resumen": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Enviar WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - Evento MinIO": {
+      "main": [
+        [
+          {
+            "node": "Code - Extraer evento MinIO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Extraer evento MinIO": {
+      "main": [
+        [
+          {
+            "node": "S3 - Descargar PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S3 - Descargar PDF": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Analizar PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Preparar destino PDF": {
+      "main": [
+        [
+          {
+            "node": "S3 - Descargar PDF para mover",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge - Informes subidos": {
+      "main": [
+        [
+          {
+            "node": "Merge - Todo completado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S3 - Borrar PDF de entrada": {
+      "main": [
+        [
+          {
+            "node": "Merge - Todo completado",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge - Todo completado": {
+      "main": [
+        [
+          {
+            "node": "Code - Preparar resumen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S3 - Subir PDF a destino": {
+      "main": [
+        [
+          {
+            "node": "S3 - Borrar PDF de entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S3 - Descargar PDF para mover": {
+      "main": [
+        [
+          {
+            "node": "S3 - Subir PDF a destino",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "UslOMwwiH98sBT9V",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "3b70c068-a5c3-4460-b190-7d696973103f",
+  "activeVersionId": "3b70c068-a5c3-4460-b190-7d696973103f",
+  "versionCounter": 201,
+  "triggerCount": 1,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-04-30T10:32:02.652Z",
+      "createdAt": "2026-04-30T10:32:02.652Z",
+      "role": "workflow:owner",
+      "workflowId": "osPAUmWVpJyppaTo",
+      "projectId": "Oydmi9LKo6hnXrnp",
+      "project": {
+        "updatedAt": "2026-04-20T15:31:20.051Z",
+        "createdAt": "2026-04-20T15:12:06.805Z",
+        "id": "Oydmi9LKo6hnXrnp",
+        "name": "Ximo Soler <grafico@addoimpresores.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "3068be6c-0e51-439e-8bf9-e72776c398e1"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": "Version 3b70c068",
+    "description": ""
+  }
+}

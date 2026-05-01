@@ -1,0 +1,188 @@
+{
+  "updatedAt": "2026-05-01T12:03:32.843Z",
+  "createdAt": "2026-04-23T14:09:34.879Z",
+  "id": "UslOMwwiH98sBT9V",
+  "name": "Error Handler WhatsApp",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "93c386e5-eeaa-479e-b123-c0cd64d24939",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b7ae3da5-8102-4777-bb59-2db6666608a0",
+              "name": "workflowName",
+              "value": "={{ $json.workflow && $json.workflow.name ? $json.workflow.name : 'Workflow desconocido' }}",
+              "type": "string"
+            },
+            {
+              "id": "7178ff3e-be34-4bf3-ab7a-67842915f092",
+              "name": "errorMessage",
+              "value": "={{ $json.execution && $json.execution.error && $json.execution.error.message ? $json.execution.error.message : 'Sin detalle de error' }}",
+              "type": "string"
+            },
+            {
+              "id": "138ab578-0ad0-4302-a2cf-8fe008381952",
+              "name": "lastNode",
+              "value": "={{ $json.execution && $json.execution.lastNodeExecuted ? $json.execution.lastNodeExecuted : 'No disponible' }}",
+              "type": "string"
+            },
+            {
+              "id": "d8fcc4be-65ae-4ed8-b21e-b0568546800b",
+              "name": "executionUrl",
+              "value": "={{ $json.execution && $json.execution.url ? $json.execution.url : '' }}",
+              "type": "string"
+            },
+            {
+              "id": "4b5157cc-a793-425c-b80b-e4a584c04108",
+              "name": "executionId",
+              "value": "={{ $json.execution && $json.execution.id ? $json.execution.id : '' }}",
+              "type": "string"
+            },
+            {
+              "id": "6700eca5-1621-4edc-a3fd-4721400cf915",
+              "name": "mode",
+              "value": "={{ $json.execution && $json.execution.mode ? $json.execution.mode : 'unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "fc9268e3-04e0-4ef2-a4b4-731024dc4a11",
+              "name": "alertText",
+              "value": "={{ '⚠️ ERROR EN N8N\\n' +'Workflow: ' + ($json.workflow && $json.workflow.name ? $json.workflow.name : 'Workflow desconocido') + '\\n' +'Error: ' + ($json.execution && $json.execution.error && $json.execution.error.message ? $json.execution.error.message : 'Sin detalle') + '\\n' +'Último nodo: ' + ($json.execution && $json.execution.lastNodeExecuted ? $json.execution.lastNodeExecuted : 'No disponible') + '\\n' +'Modo: ' + ($json.execution && $json.execution.mode ? $json.execution.mode : 'unknown') + '\\n' +($json.execution && $json.execution.url ? 'Ejecución: ' + $json.execution.url : '')}}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        0
+      ],
+      "id": "c13d5201-a8e5-457b-b005-b71b3c6755f9",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.0.119:8282/message/sendText/ADDO%20v2",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "34638599317"
+            },
+            {
+              "name": "text",
+              "value": "={{$json.alertText}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        0
+      ],
+      "id": "012c5fef-5f86-4377-b413-7feb30dda13b",
+      "name": "HTTP Request",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "0BTcqdurbeIAvpvG",
+          "name": "Header Auth account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "cd5e3a6c-a566-499a-8536-1919e94b8ebe",
+  "activeVersionId": "cd5e3a6c-a566-499a-8536-1919e94b8ebe",
+  "versionCounter": 81,
+  "triggerCount": 0,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-04-23T14:09:34.879Z",
+      "createdAt": "2026-04-23T14:09:34.879Z",
+      "role": "workflow:owner",
+      "workflowId": "UslOMwwiH98sBT9V",
+      "projectId": "Oydmi9LKo6hnXrnp",
+      "project": {
+        "updatedAt": "2026-04-20T15:31:20.051Z",
+        "createdAt": "2026-04-20T15:12:06.805Z",
+        "id": "Oydmi9LKo6hnXrnp",
+        "name": "Ximo Soler <grafico@addoimpresores.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "3068be6c-0e51-439e-8bf9-e72776c398e1"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": "Version cd5e3a6c",
+    "description": ""
+  }
+}

@@ -1,0 +1,288 @@
+{
+  "updatedAt": "2026-04-30T15:09:18.437Z",
+  "createdAt": "2026-04-29T17:32:16.293Z",
+  "id": "PkjdLuzIYTyV3U8N",
+  "name": "PDF Preflight Test",
+  "description": null,
+  "active": false,
+  "isArchived": true,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pdf-preflight-test",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "b314f379-36d3-47f4-95bd-c65af8f4814f",
+      "name": "Webhook - Recibir PDF",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -48
+      ],
+      "webhookId": "pdf-preflight-test"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.0.119:8001/analyze",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer mi-token-secreto"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "file"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "abc42ed5-6735-41a0-a527-643ff889383d",
+      "name": "HTTP Request - Analizar PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "77b81f63-6b79-4d67-9223-9188005b95dc",
+      "name": "Responder JSON",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1296,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const r = $json;\n\nfunction esc(value) {\n  return String(value ?? '')\n    .replaceAll('&', '&amp;')\n    .replaceAll('<', '&lt;')\n    .replaceAll('>', '&gt;')\n    .replaceAll('\"', '&quot;');\n}\n\nfunction boolText(value) {\n  if (value === true) return 'Sí';\n  if (value === false) return 'No';\n  return 'No detectado';\n}\n\nfunction formatBox(box) {\n  if (!box) return 'No detectado';\n\n  const width = box.width_mm ?? 'N/D';\n  const height = box.height_mm ?? 'N/D';\n\n  return `${width} x ${height} mm`;\n}\n\nfunction boxDescription(name) {\n  const descriptions = {\n    MediaBox:\n      'Define el tamaño total físico de la página PDF. Suele ser el área más grande del documento.',\n    CropBox:\n      'Define el límite para el contenido de una página cuando se muestra o imprime.',\n    ArtBox:\n      'Define el contenido significativo de la página, incluido el espacio en blanco.',\n    TrimBox:\n      'Define las dimensiones finales de la página después del recorte.',\n    BleedBox:\n      'Define la ruta de recorte cuando la página se imprime profesionalmente para permitir el recorte y plegado del papel. Las marcas de impresión pueden quedar fuera del área de sangrado.',\n  };\n\n  return descriptions[name] || 'Sin descripción.';\n}\n\nconst filename = r.filename || 'documento.pdf';\nconst baseName = filename.replace(/\\.pdf$/i, '');\n\nconst status = r.result?.status || 'DESCONOCIDO';\nconst issues = r.result?.issues || [];\n\nconst pages = r.pdfinfo?.pages ?? 'No detectado';\nconst encrypted = r.pdfinfo?.encrypted ?? 'No detectado';\n\n// Cajas PDF\nconst boxes = r.pdfinfo?.boxes || {};\n\nconst mediaBox = boxes.MediaBox || null;\nconst cropBox = boxes.CropBox || null;\nconst bleedBox = boxes.BleedBox || null;\nconst trimBox = boxes.TrimBox || null;\nconst artBox = boxes.ArtBox || null;\n\n// Tamaño principal en milímetros\nconst pageSize = r.pdfinfo?.page_size_mm || {};\n\nconst pageWidth = pageSize.width ?? trimBox?.width_mm ?? mediaBox?.width_mm ?? null;\nconst pageHeight = pageSize.height ?? trimBox?.height_mm ?? mediaBox?.height_mm ?? null;\n\nlet pageSizeSource = pageSize.source || null;\n\nif (!pageSizeSource) {\n  if (trimBox) {\n    pageSizeSource = 'TrimBox';\n  } else if (mediaBox) {\n    pageSizeSource = 'MediaBox';\n  } else {\n    pageSizeSource = 'No detectado';\n  }\n}\n\n// Sangre\nconst bleed = r.bleed || {};\nconst bleedDeclared = bleed.bleed_declared;\nconst bleedEstimated = bleed.bleed_estimated_mm ?? 0;\nconst bleedMm = bleed.bleed_mm || {};\n\n// Color / ICC\nconst colorProfile = r.color_profile || {};\nconst profileDescription = colorProfile.profile_description || 'No detectado';\nconst profileType = colorProfile.profile_type || 'No detectado';\n\n// Cobertura de tinta\nconst ink = r.ink_coverage || {};\nconst inkPages = ink.pages || [];\nconst highInkPages = ink.high_total_ink_pages_over_300 || [];\n\nconst firstInkPage = inkPages[0] || {};\n\nconst c = firstInkPage.c != null ? Math.round(firstInkPage.c * 10000) / 100 : null;\nconst m = firstInkPage.m != null ? Math.round(firstInkPage.m * 10000) / 100 : null;\nconst y = firstInkPage.y != null ? Math.round(firstInkPage.y * 10000) / 100 : null;\nconst k = firstInkPage.k != null ? Math.round(firstInkPage.k * 10000) / 100 : null;\n\nconst totalInk = firstInkPage.total_ink_percent_estimated ?? null;\n\nconst issuesHtml = issues.length\n  ? issues.map(issue => `<li>${esc(issue)}</li>`).join('\\n')\n  : '<li>No se han detectado incidencias según las reglas actuales.</li>';\n\nconst statusClass = status === 'OK' ? 'ok' : status === 'ERROR' ? 'error' : 'review';\n\nconst html = `<!doctype html>\n<html lang=\"es\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>Informe Preflight - ${esc(filename)}</title>\n  <style>\n    body {\n      font-family: Arial, sans-serif;\n      color: #222;\n      line-height: 1.45;\n      margin: 32px;\n    }\n\n    h1, h2 {\n      margin-bottom: 8px;\n    }\n\n    .status {\n      display: inline-block;\n      padding: 8px 14px;\n      border-radius: 6px;\n      font-weight: bold;\n      color: white;\n    }\n\n    .ok {\n      background: #198754;\n    }\n\n    .review {\n      background: #d97706;\n    }\n\n    .error {\n      background: #dc2626;\n    }\n\n    table {\n      border-collapse: collapse;\n      width: 100%;\n      margin: 12px 0 24px;\n    }\n\n    th, td {\n      border: 1px solid #ddd;\n      padding: 8px 10px;\n      text-align: left;\n      vertical-align: top;\n    }\n\n    th {\n      background: #f3f3f3;\n      width: 32%;\n    }\n\n    .small {\n      color: #666;\n      font-size: 12px;\n    }\n\n    .note {\n      color: #555;\n      font-size: 13px;\n    }\n  </style>\n</head>\n<body>\n  <h1>Informe Preflight PDF</h1>\n\n  <p><strong>Archivo:</strong> ${esc(filename)}</p>\n  <p><strong>Estado:</strong> <span class=\"status ${statusClass}\">${esc(status)}</span></p>\n\n  <h2>Resumen</h2>\n  <table>\n    <tr>\n      <th>Páginas</th>\n      <td>${esc(pages)}</td>\n    </tr>\n    <tr>\n      <th>Tamaño final</th>\n      <td>${pageWidth && pageHeight ? `${esc(pageWidth)} x ${esc(pageHeight)} mm` : 'No detectado'}</td>\n    </tr>\n    <tr>\n      <th>Fuente del tamaño</th>\n      <td>${esc(pageSizeSource)}</td>\n    </tr>\n    <tr>\n      <th>PDF cifrado/protegido</th>\n      <td>${esc(encrypted)}</td>\n    </tr>\n  </table>\n\n  <h2>Cajas PDF / Áreas de página</h2>\n  <table>\n    <tr>\n      <th>Caja PDF</th>\n      <th>Medida detectada</th>\n      <th>Descripción</th>\n    </tr>\n    <tr>\n      <td><strong>MediaBox</strong></td>\n      <td>${esc(formatBox(mediaBox))}</td>\n      <td>${esc(boxDescription('MediaBox'))}</td>\n    </tr>\n    <tr>\n      <td><strong>CropBox</strong></td>\n      <td>${esc(formatBox(cropBox))}</td>\n      <td>${esc(boxDescription('CropBox'))}</td>\n    </tr>\n    <tr>\n      <td><strong>ArtBox</strong></td>\n      <td>${esc(formatBox(artBox))}</td>\n      <td>${esc(boxDescription('ArtBox'))}</td>\n    </tr>\n    <tr>\n      <td><strong>TrimBox</strong></td>\n      <td>${esc(formatBox(trimBox))}</td>\n      <td>${esc(boxDescription('TrimBox'))}</td>\n    </tr>\n    <tr>\n      <td><strong>BleedBox</strong></td>\n      <td>${esc(formatBox(bleedBox))}</td>\n      <td>${esc(boxDescription('BleedBox'))}</td>\n    </tr>\n  </table>\n\n  <h2>Sangre</h2>\n  <table>\n    <tr>\n      <th>Sangre declarada</th>\n      <td>${boolText(bleedDeclared)}</td>\n    </tr>\n    <tr>\n      <th>Sangre estimada</th>\n      <td>${esc(bleedEstimated)} mm</td>\n    </tr>\n    <tr>\n      <th>Izquierda</th>\n      <td>${esc(bleedMm.left ?? 0)} mm</td>\n    </tr>\n    <tr>\n      <th>Derecha</th>\n      <td>${esc(bleedMm.right ?? 0)} mm</td>\n    </tr>\n    <tr>\n      <th>Superior</th>\n      <td>${esc(bleedMm.top ?? 0)} mm</td>\n    </tr>\n    <tr>\n      <th>Inferior</th>\n      <td>${esc(bleedMm.bottom ?? 0)} mm</td>\n    </tr>\n  </table>\n\n  <h2>Color e ICC</h2>\n  <table>\n    <tr>\n      <th>Perfil ICC</th>\n      <td>${esc(profileDescription)}</td>\n    </tr>\n    <tr>\n      <th>Tipo de perfil</th>\n      <td>${esc(profileType)}</td>\n    </tr>\n    <tr>\n      <th>Parece RGB</th>\n      <td>${boolText(colorProfile.seems_rgb)}</td>\n    </tr>\n    <tr>\n      <th>Parece perfil de impresión</th>\n      <td>${boolText(colorProfile.seems_print_profile)}</td>\n    </tr>\n  </table>\n\n  <h2>Cobertura de tinta aproximada</h2>\n  <table>\n    <tr>\n      <th>C</th>\n      <td>${c != null ? `${esc(c)}%` : 'No detectado'}</td>\n    </tr>\n    <tr>\n      <th>M</th>\n      <td>${m != null ? `${esc(m)}%` : 'No detectado'}</td>\n    </tr>\n    <tr>\n      <th>Y</th>\n      <td>${y != null ? `${esc(y)}%` : 'No detectado'}</td>\n    </tr>\n    <tr>\n      <th>K</th>\n      <td>${k != null ? `${esc(k)}%` : 'No detectado'}</td>\n    </tr>\n    <tr>\n      <th>Total tinta estimado</th>\n      <td>${totalInk != null ? `${esc(totalInk)}%` : 'No detectado'}</td>\n    </tr>\n    <tr>\n      <th>Páginas sobre 300%</th>\n      <td>${highInkPages.length ? esc(highInkPages.join(', ')) : 'No detectadas'}</td>\n    </tr>\n  </table>\n\n  <h2>Incidencias</h2>\n  <ul>\n    ${issuesHtml}\n  </ul>\n\n  <p class=\"small\">\n    Informe generado automáticamente. Este análisis es orientativo y debe validarse con herramientas profesionales de preflight para producción crítica.\n  </p>\n</body>\n</html>`;\n\nconst reportJsonText = JSON.stringify(r, null, 2);\n\nreturn {\n  json: {\n    filename,\n    status,\n    issues,\n    pages,\n    page_size_mm: {\n      width: pageWidth,\n      height: pageHeight,\n      source: pageSizeSource,\n    },\n    pdf_boxes: {\n      MediaBox: {\n        size_mm: formatBox(mediaBox),\n        description: boxDescription('MediaBox'),\n      },\n      CropBox: {\n        size_mm: formatBox(cropBox),\n        description: boxDescription('CropBox'),\n      },\n      ArtBox: {\n        size_mm: formatBox(artBox),\n        description: boxDescription('ArtBox'),\n      },\n      TrimBox: {\n        size_mm: formatBox(trimBox),\n        description: boxDescription('TrimBox'),\n      },\n      BleedBox: {\n        size_mm: formatBox(bleedBox),\n        description: boxDescription('BleedBox'),\n      },\n    },\n    bleed_declared: bleedDeclared,\n    bleed_estimated_mm: bleedEstimated,\n    icc_profile: profileDescription,\n    icc_profile_type: profileType,\n    report_html_filename: `${baseName}_preflight.html`,\n    report_json_filename: `${baseName}_preflight.json`,\n    report_html: html,\n    report_json: reportJsonText,\n    analysis: r,\n  },\n  binary: {\n    report_html: {\n      data: Buffer.from(html, 'utf8').toString('base64'),\n      mimeType: 'text/html',\n      fileName: `${baseName}_preflight.html`,\n    },\n    report_json: {\n      data: Buffer.from(reportJsonText, 'utf8').toString('base64'),\n      mimeType: 'application/json',\n      fileName: `${baseName}_preflight.json`,\n    },\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        -48
+      ],
+      "id": "ae828d01-13f8-4a53-97e0-8819ae53d1ac",
+      "name": "Code - Preparar informe"
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "preflight-pdf",
+        "fileName": "=informes/{{ $json.report_html_filename }}",
+        "binaryPropertyName": "report_html",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        672,
+        -144
+      ],
+      "id": "2b4c2229-892c-4de1-9d5c-3712ead81cfb",
+      "name": "Upload HTML",
+      "credentials": {
+        "s3": {
+          "id": "qrOXGDUvBfFXf89d",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "preflight-pdf",
+        "fileName": "=informes/{{ $json.report_json_filename }}",
+        "binaryPropertyName": "report_json",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        672,
+        48
+      ],
+      "id": "e959a8ad-4320-4074-bc5b-f54cc23e4ba6",
+      "name": "Upload JSON",
+      "credentials": {
+        "s3": {
+          "id": "qrOXGDUvBfFXf89d",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        896,
+        -48
+      ],
+      "id": "1484db93-2b9c-44fa-8c60-de797eb6d4f7",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "const informe = $('Code - Preparar informe').first().json;\n\nconst issues = informe.issues || [];\n\nconst issuesText = issues.length\n  ? issues.map(i => `- ${i}`).join('\\n')\n  : '- Sin incidencias detectadas según las reglas actuales.';\n\nconst htmlPath = `preflight-pdf/informes/${informe.report_html_filename}`;\nconst jsonPath = `preflight-pdf/informes/${informe.report_json_filename}`;\n\nconst whatsappMessage = `📄 Informe Preflight PDF\n\nArchivo: ${informe.filename}\nEstado: ${informe.status}\nPáginas: ${informe.pages}\nTamaño: ${informe.page_size_mm?.width ?? 'N/D'} x ${informe.page_size_mm?.height ?? 'N/D'} mm\nSangre declarada: ${informe.bleed_declared ? 'Sí' : 'No'}\nICC: ${informe.icc_profile}\nTipo ICC: ${informe.icc_profile_type}\n\nIncidencias:\n${issuesText}\n\nInformes guardados en MinIO:\nHTML: ${htmlPath}\nJSON: ${jsonPath}`;\n\nreturn {\n  json: {\n    status: 'informes_guardados_en_minio',\n    filename: informe.filename,\n    preflight_status: informe.status,\n    pages: informe.pages,\n    page_size_mm: informe.page_size_mm,\n    bleed_declared: informe.bleed_declared,\n    icc_profile: informe.icc_profile,\n    icc_profile_type: informe.icc_profile_type,\n    issues,\n    minio: {\n      bucket: 'preflight-pdf',\n      html_key: `informes/${informe.report_html_filename}`,\n      json_key: `informes/${informe.report_json_filename}`,\n    },\n    whatsapp_message: whatsappMessage,\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        -48
+      ],
+      "id": "f46566a2-8d89-44e4-8471-8fe1f3d06cca",
+      "name": "Code - Preparar resumen"
+    }
+  ],
+  "connections": {
+    "Webhook - Recibir PDF": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Analizar PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - Analizar PDF": {
+      "main": [
+        [
+          {
+            "node": "Code - Preparar informe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder JSON": {
+      "main": [
+        []
+      ]
+    },
+    "Code - Preparar informe": {
+      "main": [
+        [
+          {
+            "node": "Upload HTML",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Upload JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload HTML": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload JSON": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code - Preparar resumen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Preparar resumen": {
+      "main": [
+        [
+          {
+            "node": "Responder JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "d7526bdf-bfa1-4db1-81c8-077332ec21bb",
+  "activeVersionId": null,
+  "versionCounter": 68,
+  "triggerCount": 0,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-04-29T17:32:16.293Z",
+      "createdAt": "2026-04-29T17:32:16.293Z",
+      "role": "workflow:owner",
+      "workflowId": "PkjdLuzIYTyV3U8N",
+      "projectId": "Oydmi9LKo6hnXrnp",
+      "project": {
+        "updatedAt": "2026-04-20T15:31:20.051Z",
+        "createdAt": "2026-04-20T15:12:06.805Z",
+        "id": "Oydmi9LKo6hnXrnp",
+        "name": "Ximo Soler <grafico@addoimpresores.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "3068be6c-0e51-439e-8bf9-e72776c398e1"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

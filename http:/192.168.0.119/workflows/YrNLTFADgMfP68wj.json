@@ -1,0 +1,577 @@
+{
+  "updatedAt": "2026-05-01T11:48:59.267Z",
+  "createdAt": "2026-04-20T15:58:11.206Z",
+  "id": "YrNLTFADgMfP68wj",
+  "name": "Trello -> WhatsApp Evolution",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "da1614ba-3fb3-46f6-bdc5-1bf107dc97be",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://api.trello.com/1/boards/5ff2d7873b288c34fbc1b918/lists",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,name"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "ae3b3e8b-3810-4a09-adb7-b91ac2b4bd03",
+      "name": "Trello - Listas"
+    },
+    {
+      "parameters": {
+        "url": "https://api.trello.com/1/boards/5ff2d7873b288c34fbc1b918/cards",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,name,idList,url,closed,dateLastActivity,labels,due,dueComplete"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        416,
+        0
+      ],
+      "id": "c3ac30f2-b332-4b61-9904-504966dd3e9c",
+      "name": "Trello - Tarjetas"
+    },
+    {
+      "parameters": {
+        "jsCode": "function flattenNodeItems(nodeName) {\n  const raw = $(nodeName).all();\n  const out = [];\n\n  for (const item of raw) {\n    if (Array.isArray(item.json)) {\n      out.push(...item.json);\n    } else {\n      out.push(item.json);\n    }\n  }\n\n  return out;\n}\n\nfunction formatDate(dateStr) {\n  if (!dateStr) return null;\n  const d = new Date(dateStr);\n  return d.toLocaleString('es-ES', {\n    day: '2-digit',\n    month: '2-digit',\n    year: 'numeric',\n    hour: '2-digit',\n    minute: '2-digit',\n  });\n}\n\nfunction getDueStatus(due, dueComplete) {\n  if (!due) return null;\n  if (dueComplete) return '✅ completada';\n\n  const now = new Date();\n  const dueDate = new Date(due);\n\n  const diffMs = dueDate - now;\n  const diffHours = diffMs / (1000 * 60 * 60);\n\n  if (diffMs < 0) return '🔴 vencida';\n  if (diffHours <= 24) return '🟠 vence en menos de 24h';\n  return '🟡 pendiente';\n}\n\nfunction formatLabels(labels) {\n  if (!Array.isArray(labels) || labels.length === 0) return null;\n\n  return labels.map(label => {\n    if (label.name && label.name.trim()) return label.name.trim();\n    if (label.color) return `Etiqueta ${label.color}`;\n    return 'Etiqueta';\n  }).join(', ');\n}\n\nconst lists = flattenNodeItems(\"Trello - Listas\");\nconst cards = flattenNodeItems(\"Trello - Tarjetas\").filter(card => !card.closed);\n\nconst listMap = {};\nfor (const list of lists) {\n  listMap[list.id] = list.name;\n}\n\nconst store = $getWorkflowStaticData('global');\nif (!store.cards) store.cards = {};\n\nconst currentState = {};\nfor (const card of cards) {\n  currentState[card.id] = {\n    idList: card.idList,\n    listName: listMap[card.idList] || card.idList,\n    name: card.name,\n    url: card.url,\n    dateLastActivity: card.dateLastActivity,\n    labels: formatLabels(card.labels),\n    due: card.due,\n    dueFormatted: formatDate(card.due),\n    dueComplete: !!card.dueComplete,\n    dueStatus: getDueStatus(card.due, card.dueComplete),\n  };\n}\n\n// Primera ejecución: solo guarda estado y no envía nada\nif (!store.initialized) {\n  store.cards = currentState;\n  store.initialized = true;\n  return [];\n}\n\nconst output = [];\n\nfor (const [cardId, current] of Object.entries(currentState)) {\n  const previous = store.cards[cardId];\n\n  if (!previous) {\n    continue;\n  }\n\n  if (previous.idList !== current.idList) {\n    let text = `🔔 Cambio en Trello\nFicha: ${current.name}\nDe: ${previous.listName || previous.idList}\nA: ${current.listName || current.idList}`;\n\n    if (current.labels) {\n      text += `\\nEtiquetas: ${current.labels}`;\n    }\n\n    if (current.dueFormatted) {\n      text += `\\nEntrega: ${current.dueFormatted}`;\n    }\n\n    if (current.dueStatus) {\n      text += `\\nEstado fecha: ${current.dueStatus}`;\n    }\n\n    text += `\\n${current.url}`;\n\n    output.push({\n      json: {\n        cardId,\n        cardName: current.name,\n        fromList: previous.listName || previous.idList,\n        toList: current.listName || current.idList,\n        cardUrl: current.url,\n        labels: current.labels,\n        due: current.dueFormatted,\n        dueStatus: current.dueStatus,\n        text,\n      }\n    });\n  }\n}\n\nstore.cards = currentState;\n\nreturn output;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        0
+      ],
+      "id": "4a5c8bf6-b8f5-46e8-9630-83dfc410c18f",
+      "name": "Detectar cambios"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.0.119:8282/message/sendText/ADDO%20v2",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "BD4878B34C2E-4462-8C8A-9F252FCA8257"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "=raw",
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  number: \"120363425302477785@g.us\",\n  text: $json.text\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        832,
+        0
+      ],
+      "id": "21c0bbc0-fd6b-46d3-beb8-2415cb91c724",
+      "name": "Evolution - Enviar"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Trello - Listas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trello - Listas": {
+      "main": [
+        [
+          {
+            "node": "Trello - Tarjetas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trello - Tarjetas": {
+      "main": [
+        [
+          {
+            "node": "Detectar cambios",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detectar cambios": {
+      "main": [
+        [
+          {
+            "node": "Evolution - Enviar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "UslOMwwiH98sBT9V"
+  },
+  "staticData": {
+    "node:Schedule Trigger": {
+      "recurrenceRules": []
+    },
+    "global": {
+      "cards": {
+        "69c25270d46ef40f8527359c": {
+          "idList": "60f174043b502218b5099224",
+          "listName": "ROTATIVA",
+          "name": "AD LEVANTE. ALBARAN A4 CON PLECA",
+          "url": "https://trello.com/c/AM8Q6AiV/4131-ad-levante-albaran-a4-con-pleca",
+          "dateLastActivity": "2026-03-25T02:47:35.100Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69ccef60a5e4dfaf8a23aba9": {
+          "idList": "686f8c79aa107ed2d05be932",
+          "listName": "TRABAJOS EN PROCESO",
+          "name": "JANIMPRENT. TALONARIOS NUMERADOS",
+          "url": "https://trello.com/c/GrkaIS5t/4166-janimprent-talonarios-numerados",
+          "dateLastActivity": "2026-04-15T01:47:04.078Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69d6077b63eb8bf8d1956886": {
+          "idList": "5ff2d7873b288c34fbc1b91a",
+          "listName": "DIGITAL",
+          "name": "AD QUIERE. BOLSAS 229 X 162 FINCAS FADRELL",
+          "url": "https://trello.com/c/Q3EI9Mwh/4179-ad-quiere-bolsas-229-x-162-fincas-fadrell",
+          "dateLastActivity": "2026-04-20T09:02:37.025Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69d6076888384a2986107793": {
+          "idList": "5ff2d7873b288c34fbc1b91a",
+          "listName": "DIGITAL",
+          "name": "AD QUIERE. SOBRES V/D DIGITAL FINCAS FADRELL",
+          "url": "https://trello.com/c/xowoqaz0/4178-ad-quiere-sobres-v-d-digital-fincas-fadrell",
+          "dateLastActivity": "2026-04-20T09:02:41.965Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69e8a300dfb9953829c43612": {
+          "idList": "5ff2d7873b288c34fbc1b91a",
+          "listName": "DIGITAL",
+          "name": "ADDO. FLYER CAFETERIA PAULA",
+          "url": "https://trello.com/c/PdleTMSO/4241-addo-flyer-cafeteria-paula",
+          "dateLastActivity": "2026-04-22T15:07:02.432Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69e8a80bcbee97124871027b": {
+          "idList": "5ff2d7873b288c34fbc1b91a",
+          "listName": "DIGITAL",
+          "name": "CENTRO FORMACION SANTA ANA. HOJA INSCRIPCION",
+          "url": "https://trello.com/c/XPHWwEdk/4243-centro-formacion-santa-ana-hoja-inscripcion",
+          "dateLastActivity": "2026-04-22T15:07:06.828Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69e8a2f5287530ac3ea8394d": {
+          "idList": "5ff2d7873b288c34fbc1b91a",
+          "listName": "DIGITAL",
+          "name": "HOY COMO AYER. TARJETAS",
+          "url": "https://trello.com/c/ApTFsnRr/4240-hoy-como-ayer-tarjetas",
+          "dateLastActivity": "2026-04-23T01:47:21.323Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69e8a7f99d5db4b8262453a8": {
+          "idList": "5ff2d7873b288c34fbc1b91a",
+          "listName": "DIGITAL",
+          "name": "PACKAGING GUADALAVIAR. FOLLETO A4",
+          "url": "https://trello.com/c/6f3PVQqu/4242-packaging-guadalaviar-folleto-a4",
+          "dateLastActivity": "2026-04-23T01:47:21.323Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69e51ea17e16253a67cdaebd": {
+          "idList": "5ff2d7873b288c34fbc1b91a",
+          "listName": "DIGITAL",
+          "name": "TEST AUTOMATIZACION",
+          "url": "https://trello.com/c/YEeCSnFG/4225-test-automatizacion",
+          "dateLastActivity": "2026-04-23T01:47:21.323Z",
+          "labels": "URGENTE",
+          "due": "2026-04-20T18:44:25.218Z",
+          "dueFormatted": "20/04/2026, 18:44",
+          "dueComplete": false,
+          "dueStatus": "🔴 vencida"
+        },
+        "69e9b6346de3f5040369a026": {
+          "idList": "5ff2d7873b288c34fbc1b91a",
+          "listName": "DIGITAL",
+          "name": "NUPECA. PROMO MAYO-JUNIO",
+          "url": "https://trello.com/c/tnHgt89D/4244-nupeca-promo-mayo-junio",
+          "dateLastActivity": "2026-04-23T06:03:32.437Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69e9c9a46538c1f75a1609ce": {
+          "idList": "5ff2d7873b288c34fbc1b91a",
+          "listName": "DIGITAL",
+          "name": "UNIATRANS. SNAP CMR.",
+          "url": "https://trello.com/c/VUFFuFxN/4245-uniatrans-snap-cmr",
+          "dateLastActivity": "2026-04-23T07:59:20.136Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69e761bccf3b35de8d42a7ad": {
+          "idList": "626266da87555555784f8386",
+          "listName": "OFFSET",
+          "name": "CENTRO TRANSFUSION. CARTELES DOS MODELOS",
+          "url": "https://trello.com/c/GOzXFcz3/4237-centro-transfusion-carteles-dos-modelos",
+          "dateLastActivity": "2026-04-21T11:54:36.326Z",
+          "labels": "ESP. RESPUESTA CLIENTE",
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69e7617511add9648ccfc4c0": {
+          "idList": "60f174043b502218b5099224",
+          "listName": "ROTATIVA",
+          "name": "SUGEIN. RECIBOS CONTINUO",
+          "url": "https://trello.com/c/FGqnmGzW/4234-sugein-recibos-continuo",
+          "dateLastActivity": "2026-04-22T05:38:20.404Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69e7427c6417fe6b970a4d61": {
+          "idList": "60f174043b502218b5099224",
+          "listName": "ROTATIVA",
+          "name": "TAL. LA FE 813702 (stock)",
+          "url": "https://trello.com/c/wfo3fFrw/4233-tal-la-fe-813702-stock",
+          "dateLastActivity": "2026-04-22T01:47:31.246Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69df478ae22612edff76cd5e": {
+          "idList": "686f8c79aa107ed2d05be932",
+          "listName": "TRABAJOS EN PROCESO",
+          "name": "JAPOFISH. TALONARIOS",
+          "url": "https://trello.com/c/Cuywv7PD/4203-japofish-talonarios",
+          "dateLastActivity": "2026-04-21T14:14:08.593Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69e1de50aa76714154597a88": {
+          "idList": "686f8c79aa107ed2d05be932",
+          "listName": "TRABAJOS EN PROCESO",
+          "name": "VALVULAS ARCO. REF. 6151710",
+          "url": "https://trello.com/c/iGrl8maz/4215-valvulas-arco-ref-6151710",
+          "dateLastActivity": "2026-04-21T07:56:50.525Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69e1de5a06861e5254972816": {
+          "idList": "686f8c79aa107ed2d05be932",
+          "listName": "TRABAJOS EN PROCESO",
+          "name": "VALVULAS ARCO. REF. 6151709",
+          "url": "https://trello.com/c/Oy7dMVdL/4216-valvulas-arco-ref-6151709",
+          "dateLastActivity": "2026-04-21T07:57:17.718Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69e1de65a27b67e6f420a348": {
+          "idList": "686f8c79aa107ed2d05be932",
+          "listName": "TRABAJOS EN PROCESO",
+          "name": "VALVULAS ARCO. REF. 6151459",
+          "url": "https://trello.com/c/bcV4Zubm/4217-valvulas-arco-ref-6151459",
+          "dateLastActivity": "2026-04-21T08:35:32.792Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69e20eddd147e1ebaa3e83df": {
+          "idList": "686f8c79aa107ed2d05be932",
+          "listName": "TRABAJOS EN PROCESO",
+          "name": "HOSPITAL DR. PESET. REF. 813056 CUARTILLA CON MEMBRETE",
+          "url": "https://trello.com/c/I34l4X9s/4222-hospital-dr-peset-ref-813056-cuartilla-con-membrete",
+          "dateLastActivity": "2026-04-21T10:58:54.703Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69d64032458261cf304a08c0": {
+          "idList": "686f8c79aa107ed2d05be932",
+          "listName": "TRABAJOS EN PROCESO",
+          "name": "PEREZ LLULL. LOTERIA 9 MODELOS",
+          "url": "https://trello.com/c/nhfqgnyC/4184-perez-llull-loteria-9-modelos",
+          "dateLastActivity": "2026-04-21T09:24:42.289Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69cb7cdde5531acdff6fc32f": {
+          "idList": "686f8c79aa107ed2d05be932",
+          "listName": "TRABAJOS EN PROCESO",
+          "name": "PESET. CARPETILLAS OCRE (STOCK)",
+          "url": "https://trello.com/c/bhstuUY1/4163-peset-carpetillas-ocre-stock",
+          "dateLastActivity": "2026-04-21T14:14:31.074Z",
+          "labels": "ENVIAR A SDA EN MAYO",
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69e761b220d9c768d73f520c": {
+          "idList": "686f8c79aa107ed2d05be932",
+          "listName": "TRABAJOS EN PROCESO",
+          "name": "GEANCAR. TARJETAS",
+          "url": "https://trello.com/c/8OWg4R1V/4236-geancar-tarjetas",
+          "dateLastActivity": "2026-04-22T09:40:09.856Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "698aef03b315b9956f1be574": {
+          "idList": "686f8c79aa107ed2d05be932",
+          "listName": "TRABAJOS EN PROCESO",
+          "name": "SPORTS MEDICINE CENTER. REVISTA",
+          "url": "https://trello.com/c/hQiaVSzD/3979-sports-medicine-center-revista",
+          "dateLastActivity": "2026-04-23T06:03:09.751Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69e1de729cf16a56bf973f19": {
+          "idList": "5ff849dc124acf44221d16d8",
+          "listName": "ACABADO EXTERNO",
+          "name": "VALVULAS ARCO. REF. 6150738",
+          "url": "https://trello.com/c/d8U5KtYe/4218-valvulas-arco-ref-6150738",
+          "dateLastActivity": "2026-04-20T06:35:06.206Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69e72658f7e648e45579803e": {
+          "idList": "5ff849dc124acf44221d16d8",
+          "listName": "ACABADO EXTERNO",
+          "name": "SALVADOR JUST. CARPETAS LOTESNA",
+          "url": "https://trello.com/c/wwcTHXIk/4232-salvador-just-carpetas-lotesna",
+          "dateLastActivity": "2026-04-21T14:04:29.654Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69d601e30e3e16d707c9640d": {
+          "idList": "5ff2f87b15df1c56486956ed",
+          "listName": "FABRICACION EXTERNO",
+          "name": "DEP. SALUD ELDA. BOLSAS CS9/1",
+          "url": "https://trello.com/c/qua9Bl2w/4177-dep-salud-elda-bolsas-cs9-1",
+          "dateLastActivity": "2026-04-08T07:23:22.265Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69de23af1f9a8bc15c7dc41d": {
+          "idList": "5ff2f87b15df1c56486956ed",
+          "listName": "FABRICACION EXTERNO",
+          "name": "AS. CRESPO. CARTERAS DOCUMENTACION",
+          "url": "https://trello.com/c/FW6TL4Iv/4199-as-crespo-carteras-documentacion",
+          "dateLastActivity": "2026-04-14T11:23:27.154Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69de23c3f6b8fcbe86436b59": {
+          "idList": "5ff2f87b15df1c56486956ed",
+          "listName": "FABRICACION EXTERNO",
+          "name": "JOAQUIN VERDU. SOBRE SOLAPA TRAPEZOIDAL",
+          "url": "https://trello.com/c/9TRL18WW/4200-joaquin-verdu-sobre-solapa-trapezoidal",
+          "dateLastActivity": "2026-04-14T11:23:47.594Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69de23cc14184b2ecce6936b": {
+          "idList": "5ff2f87b15df1c56486956ed",
+          "listName": "FABRICACION EXTERNO",
+          "name": "AS. CRESPO. BOLIGRAFOS",
+          "url": "https://trello.com/c/81wLb0NY/4201-as-crespo-boligrafos",
+          "dateLastActivity": "2026-04-14T11:23:56.081Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        },
+        "69e093cbcdc26cca586522ac": {
+          "idList": "5ff2f87b15df1c56486956ed",
+          "listName": "FABRICACION EXTERNO",
+          "name": "SES. REPARACION CARTEL",
+          "url": "https://trello.com/c/LyXE1Lm7/4210-ses-reparacion-cartel",
+          "dateLastActivity": "2026-04-21T14:04:59.262Z",
+          "labels": null,
+          "due": null,
+          "dueFormatted": null,
+          "dueComplete": false,
+          "dueStatus": null
+        }
+      },
+      "initialized": true
+    }
+  },
+  "meta": null,
+  "pinData": {},
+  "versionId": "a561b547-e385-4e7d-819a-503b5ce87036",
+  "activeVersionId": null,
+  "versionCounter": 1044,
+  "triggerCount": 1,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-04-20T15:58:11.206Z",
+      "createdAt": "2026-04-20T15:58:11.206Z",
+      "role": "workflow:owner",
+      "workflowId": "YrNLTFADgMfP68wj",
+      "projectId": "Oydmi9LKo6hnXrnp",
+      "project": {
+        "updatedAt": "2026-04-20T15:31:20.051Z",
+        "createdAt": "2026-04-20T15:12:06.805Z",
+        "id": "Oydmi9LKo6hnXrnp",
+        "name": "Ximo Soler <grafico@addoimpresores.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "3068be6c-0e51-439e-8bf9-e72776c398e1"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}
