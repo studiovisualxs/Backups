@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-01T12:12:42.431Z",
+  "updatedAt": "2026-05-04T08:51:13.109Z",
   "createdAt": "2026-04-30T16:20:45.428Z",
   "id": "KrQoW2SbkunZX5R7",
   "name": "PDF Preflight - Whatsapp Entrada",
@@ -312,9 +312,15 @@
       "parameters": {
         "method": "POST",
         "url": "http://192.168.0.119:8001/analyze",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer mi-token-secreto"
+            }
+          ]
+        },
         "sendBody": true,
         "contentType": "multipart-form-data",
         "bodyParameters": {
@@ -335,13 +341,7 @@
       "position": [
         992,
         48
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "XTn3BIG8CuCeF42M",
-          "name": "OpenAI / OCR / PDF API"
-        }
-      }
+      ]
     },
     {
       "parameters": {
@@ -616,9 +616,9 @@
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
-  "versionId": "d7d14021-0aa8-4a75-a0aa-d4ea94bf1e18",
-  "activeVersionId": "d7d14021-0aa8-4a75-a0aa-d4ea94bf1e18",
-  "versionCounter": 94,
+  "versionId": "db8fd8c1-9ef3-4cea-92eb-e96fe0f673f1",
+  "activeVersionId": "db8fd8c1-9ef3-4cea-92eb-e96fe0f673f1",
+  "versionCounter": 107,
   "triggerCount": 1,
   "tags": [],
   "shared": [
@@ -641,7 +641,7 @@
     }
   ],
   "versionMetadata": {
-    "name": "Version d7d14021",
+    "name": "Version db8fd8c1",
     "description": ""
   }
 }

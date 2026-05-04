@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-01T12:15:00.954Z",
+  "updatedAt": "2026-05-04T08:52:59.631Z",
   "createdAt": "2026-04-30T10:32:02.652Z",
   "id": "osPAUmWVpJyppaTo",
   "name": "PDF Preflight - MinIO Entrada",
@@ -11,9 +11,15 @@
       "parameters": {
         "method": "POST",
         "url": "http://192.168.0.119:8001/analyze",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer mi-token-secreto"
+            }
+          ]
+        },
         "sendBody": true,
         "contentType": "multipart-form-data",
         "bodyParameters": {
@@ -34,13 +40,7 @@
       "position": [
         208,
         0
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "XTn3BIG8CuCeF42M",
-          "name": "OpenAI / OCR / PDF API"
-        }
-      }
+      ]
     },
     {
       "parameters": {
@@ -486,9 +486,9 @@
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
-  "versionId": "3b70c068-a5c3-4460-b190-7d696973103f",
-  "activeVersionId": "3b70c068-a5c3-4460-b190-7d696973103f",
-  "versionCounter": 202,
+  "versionId": "724e20d4-c254-4c2e-920c-c4d71ab903f4",
+  "activeVersionId": "724e20d4-c254-4c2e-920c-c4d71ab903f4",
+  "versionCounter": 208,
   "triggerCount": 1,
   "tags": [],
   "shared": [
@@ -511,7 +511,7 @@
     }
   ],
   "versionMetadata": {
-    "name": "Version 3b70c068",
+    "name": "Version 724e20d4",
     "description": ""
   }
 }
