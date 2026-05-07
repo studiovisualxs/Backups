@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-04-23T15:37:01.211Z",
+  "updatedAt": "2026-05-07T16:18:00.502Z",
   "createdAt": "2026-04-21T14:36:32.081Z",
   "id": "hMiTLtodkZV8lpMr",
   "name": "Asistente WhatsApp+Trello v5 Mejorado ListaBlanca Filtros Ayuda",
@@ -249,19 +249,18 @@
         "url": "http://192.168.0.119:8282/message/sendText/ADDO%20v2",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "bodyParameters": {
+        "sendHeaders": true,
+        "headerParameters": {
           "parameters": [
             {
-              "name": "number",
-              "value": "={{ $json.number }}"
-            },
-            {
-              "name": "text",
-              "value": "={{ $json.output }}"
+              "name": "Content-Type",
+              "value": "application/json"
             }
           ]
         },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    number: \"120363425302477785@g.us\",\n    text: $json.whatsapp_message\n  }\n}}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -532,9 +531,9 @@
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
-  "versionId": "fac0c40f-5c04-48ed-9c53-dec040ad80b5",
-  "activeVersionId": "fac0c40f-5c04-48ed-9c53-dec040ad80b5",
-  "versionCounter": 194,
+  "versionId": "6d8cbe0a-ae2c-4cf8-b41c-1f8cf6b10d7d",
+  "activeVersionId": "6d8cbe0a-ae2c-4cf8-b41c-1f8cf6b10d7d",
+  "versionCounter": 203,
   "triggerCount": 1,
   "tags": [],
   "shared": [
@@ -557,7 +556,7 @@
     }
   ],
   "versionMetadata": {
-    "name": "Version fac0c40f",
+    "name": "Version 6d8cbe0a",
     "description": ""
   }
 }
