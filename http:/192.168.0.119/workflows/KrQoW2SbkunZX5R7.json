@@ -4,7 +4,7 @@
   "id": "KrQoW2SbkunZX5R7",
   "name": "PDF Preflight - Whatsapp Entrada",
   "description": null,
-  "active": true,
+  "active": false,
   "isArchived": false,
   "nodes": [
     {
@@ -617,8 +617,8 @@
   },
   "pinData": {},
   "versionId": "74be421d-52a9-451d-aacc-4c6addc58b36",
-  "activeVersionId": "74be421d-52a9-451d-aacc-4c6addc58b36",
-  "versionCounter": 113,
+  "activeVersionId": null,
+  "versionCounter": 114,
   "triggerCount": 1,
   "tags": [],
   "shared": [

@@ -1,8 +1,8 @@
 {
-  "updatedAt": "2026-05-08T06:59:59.269Z",
-  "createdAt": "2026-04-21T14:36:32.081Z",
-  "id": "hMiTLtodkZV8lpMr",
-  "name": "Asistente WhatsApp+Trello v5 Mejorado ListaBlanca Filtros Ayuda",
+  "updatedAt": "2026-05-08T06:54:39.471Z",
+  "createdAt": "2026-05-08T06:54:03.332Z",
+  "id": "1XFXbc3oQTZiQtWV",
+  "name": "Asistente WhatsApp+Trello v5 Mejorado ListaBlanca Filtros Ayuda (May 7 at 18:18:00)",
   "description": null,
   "active": false,
   "isArchived": true,
@@ -249,19 +249,18 @@
         "url": "http://192.168.0.119:8282/message/sendText/ADDO%20v2",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "bodyParameters": {
+        "sendHeaders": true,
+        "headerParameters": {
           "parameters": [
             {
-              "name": "number",
-              "value": "={{ $json.number}}"
-            },
-            {
-              "name": "text",
-              "value": "={{ $json.output  }}"
+              "name": "Content-Type",
+              "value": "application/json"
             }
           ]
         },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    number: \"120363425302477785@g.us\",\n    text: $json.whatsapp_message\n  }\n}}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -412,137 +411,22 @@
     }
   },
   "settings": {
-    "executionOrder": "v1",
-    "binaryMode": "separate",
-    "availableInMCP": false,
-    "timeSavedMode": "fixed",
-    "errorWorkflow": "UslOMwwiH98sBT9V",
-    "callerPolicy": "workflowsFromSameOwner"
+    "availableInMCP": false
   },
-  "staticData": {
-    "global": {
-      "cardSearches": {
-        "34644255770@s.whatsapp.net": {
-          "timestamp": 1776933242685,
-          "results": [
-            {
-              "id": "69e761bccf3b35de8d42a7ad",
-              "name": "CENTRO TRANSFUSION. CARTELES DOS MODELOS",
-              "listName": "OFFSET",
-              "due": null,
-              "desc": "",
-              "labels": [
-                {
-                  "id": "677fb152fd9de5fa84e138a9",
-                  "idBoard": "5ff2d7873b288c34fbc1b918",
-                  "idOrganization": "5ff2d6786e55256241df12f1",
-                  "name": "ESP. RESPUESTA CLIENTE",
-                  "nodeId": "ari:cloud:trello::label/workspace/5ff2d6786e55256241df12f1/677fb152fd9de5fa84e138a9",
-                  "color": "orange",
-                  "uses": 18
-                }
-              ],
-              "shortUrl": "https://trello.com/c/GOzXFcz3",
-              "url": "https://trello.com/c/GOzXFcz3/4237-centro-transfusion-carteles-dos-modelos",
-              "closed": false
-            },
-            {
-              "id": "69de23af1f9a8bc15c7dc41d",
-              "name": "AS. CRESPO. CARTERAS DOCUMENTACION",
-              "listName": "FABRICACION EXTERNO",
-              "due": null,
-              "desc": "",
-              "labels": [],
-              "shortUrl": "https://trello.com/c/FW6TL4Iv",
-              "url": "https://trello.com/c/FW6TL4Iv/4199-as-crespo-carteras-documentacion",
-              "closed": false
-            },
-            {
-              "id": "69e20eddd147e1ebaa3e83df",
-              "name": "HOSPITAL DR. PESET. REF. 813056 CUARTILLA CON MEMBRETE",
-              "listName": "TRABAJOS EN PROCESO",
-              "due": null,
-              "desc": "",
-              "labels": [],
-              "shortUrl": "https://trello.com/c/I34l4X9s",
-              "url": "https://trello.com/c/I34l4X9s/4222-hospital-dr-peset-ref-813056-cuartilla-con-membrete",
-              "closed": false
-            },
-            {
-              "id": "69d64032458261cf304a08c0",
-              "name": "PEREZ LLULL. LOTERIA 9 MODELOS",
-              "listName": "TRABAJOS EN PROCESO",
-              "due": null,
-              "desc": "",
-              "labels": [],
-              "shortUrl": "https://trello.com/c/nhfqgnyC",
-              "url": "https://trello.com/c/nhfqgnyC/4184-perez-llull-loteria-9-modelos",
-              "closed": false
-            },
-            {
-              "id": "69e72658f7e648e45579803e",
-              "name": "SALVADOR JUST. CARPETAS LOTESNA",
-              "listName": "ACABADO EXTERNO",
-              "due": null,
-              "desc": "",
-              "labels": [],
-              "shortUrl": "https://trello.com/c/wwcTHXIk",
-              "url": "https://trello.com/c/wwcTHXIk/4232-salvador-just-carpetas-lotesna",
-              "closed": false
-            },
-            {
-              "id": "698aef03b315b9956f1be574",
-              "name": "SPORTS MEDICINE CENTER. REVISTA",
-              "listName": "TRABAJOS EN PROCESO",
-              "due": null,
-              "desc": "",
-              "labels": [],
-              "shortUrl": "https://trello.com/c/hQiaVSzD",
-              "url": "https://trello.com/c/hQiaVSzD/3979-sports-medicine-center-revista",
-              "closed": false
-            },
-            {
-              "id": "69c25270d46ef40f8527359c",
-              "name": "AD LEVANTE. ALBARAN A4 CON PLECA",
-              "listName": "ROTATIVA",
-              "due": null,
-              "desc": "",
-              "labels": [],
-              "shortUrl": "https://trello.com/c/AM8Q6AiV",
-              "url": "https://trello.com/c/AM8Q6AiV/4131-ad-levante-albaran-a4-con-pleca",
-              "closed": false
-            },
-            {
-              "id": "69e8a300dfb9953829c43612",
-              "name": "ADDO. FLYER CAFETERIA PAULA",
-              "listName": "DIGITAL",
-              "due": null,
-              "desc": "",
-              "labels": [],
-              "shortUrl": "https://trello.com/c/PdleTMSO",
-              "url": "https://trello.com/c/PdleTMSO/4241-addo-flyer-cafeteria-paula",
-              "closed": false
-            }
-          ]
-        }
-      }
-    }
-  },
-  "meta": {
-    "templateCredsSetupCompleted": true
-  },
-  "pinData": {},
-  "versionId": "8236743a-deaf-4398-9e94-8863c032961c",
+  "staticData": null,
+  "meta": null,
+  "pinData": null,
+  "versionId": "b45805c5-44a8-4404-8646-4f1296ff59fe",
   "activeVersionId": null,
-  "versionCounter": 226,
-  "triggerCount": 1,
+  "versionCounter": 2,
+  "triggerCount": 0,
   "tags": [],
   "shared": [
     {
-      "updatedAt": "2026-04-21T14:36:32.081Z",
-      "createdAt": "2026-04-21T14:36:32.081Z",
+      "updatedAt": "2026-05-08T06:54:03.332Z",
+      "createdAt": "2026-05-08T06:54:03.332Z",
       "role": "workflow:owner",
-      "workflowId": "hMiTLtodkZV8lpMr",
+      "workflowId": "1XFXbc3oQTZiQtWV",
       "projectId": "Oydmi9LKo6hnXrnp",
       "project": {
         "updatedAt": "2026-04-20T15:31:20.051Z",
