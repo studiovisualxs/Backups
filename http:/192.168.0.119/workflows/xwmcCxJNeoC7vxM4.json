@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-09T10:32:42.618Z",
+  "updatedAt": "2026-05-09T13:50:31.128Z",
   "createdAt": "2026-05-09T10:32:21.122Z",
   "id": "xwmcCxJNeoC7vxM4",
   "name": "Alertas PLACSP",
@@ -35,14 +35,15 @@
       "typeVersion": 1,
       "position": [
         0,
-        208
+        192
       ]
     },
     {
       "parameters": {
+        "authentication": "serviceAccount",
         "documentId": {
           "__rl": true,
-          "value": "REEMPLAZA_CON_ID_DE_TU_GOOGLE_SHEET",
+          "value": "1v3NHRruLYk3CmArePxKXpfAp2Zhozvq-Jg8X4tjM3lc",
           "mode": "id"
         },
         "sheetName": {
@@ -57,65 +58,139 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        240,
-        112
-      ]
+        224,
+        96
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "WqqKIfHDEaQErgAl",
+          "name": "Google Service Account account"
+        }
+      }
     },
     {
       "parameters": {
-        "jsCode": "\n// Espera una hoja config con columnas: campo | valor\n// Ejemplo:\n// feed_url | https://TU-FEED-ATOM.xml\n// keywords | software, inteligencia artificial, datos\n// exclude_keywords | limpieza, jardinería\n// provincia | Valencia\n// cpv | 72000000,48000000\n// importe_min | 15000\n// email_destino | tu@email.com\n// max_resultados | 25\n\nconst rows = $input.all().map(i => i.json);\nconst cfg = {};\nfor (const row of rows) {\n  const key = String(row.campo || row.key || '').trim();\n  const val = String(row.valor || row.value || '').trim();\n  if (key) cfg[key] = val;\n}\n\nfunction list(name) {\n  return String(cfg[name] || '')\n    .split(',')\n    .map(s => s.trim().toLowerCase())\n    .filter(Boolean);\n}\n\nreturn [{\n  json: {\n    feed_url: cfg.feed_url || 'PEGA_AQUI_URL_ATOM_XML',\n    keywords: list('keywords'),\n    exclude_keywords: list('exclude_keywords'),\n    provincias: list('provincia'),\n    cpvs: list('cpv'),\n    importe_min: Number(String(cfg.importe_min || '0').replace(/[^\\d.,-]/g, '').replace(',', '.')) || 0,\n    email_destino: cfg.email_destino || '',\n    max_resultados: Number(cfg.max_resultados || 25) || 25\n  }\n}];\n"
+        "jsCode": "const rows = $input.all().map(i => i.json);\n\nconst config = {};\n\nfor (const row of rows) {\n  const key = String(row.campo || '').trim();\n  const value = row.valor ?? '';\n\n  if (key) config[key] = value;\n}\n\nfunction splitList(value) {\n  return String(value || '')\n    .split(',')\n    .map(v => v.trim())\n    .filter(Boolean);\n}\n\nconst now = new Date();\nconst yyyy = now.getFullYear();\nconst mm = String(now.getMonth() + 1).padStart(2, '0');\n\nconst feedUrlAuto = `https://contrataciondelsectorpublico.gob.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3_${yyyy}${mm}.zip`;\n\nreturn [{\n  json: {\n    feed_url: config.feed_url && String(config.feed_url).trim()\n      ? String(config.feed_url).trim()\n      : feedUrlAuto,\n\n    keywords: splitList(config.keywords),\n    exclude_keywords: splitList(config.exclude_keywords),\n    provincias: splitList(config.provincia),\n    cpvs: splitList(config.cpv),\n\n    importe_min: Number(config.importe_min || 0),\n    email_destino: String(config.email_destino || '').trim(),\n    max_resultados: Number(config.max_resultados || 25),\n    solo_abiertas: String(config.solo_abiertas || '').toLowerCase() === 'sí',\n    frecuencia: String(config.frecuencia || 'diaria').trim()\n  }\n}];"
       },
       "id": "b1752069-f578-465c-aa0c-b346ae7399fe",
       "name": "Normalizar configuración",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        464,
-        112
+        448,
+        96
       ]
     },
     {
       "parameters": {
-        "jsCode": "\n// Base: descarga un feed ATOM/XML, extrae entries y aplica filtros.\n// Nota: si tu URL es ZIP, usa primero un nodo de descompresión o apunta a XML directo.\nconst cfg = $json;\nif (!cfg.feed_url || cfg.feed_url.includes('PEGA_AQUI')) {\n  throw new Error('Falta feed_url en la hoja config');\n}\n\nconst res = await fetch(cfg.feed_url);\nif (!res.ok) throw new Error(`Error descargando feed: ${res.status} ${res.statusText}`);\nconst xml = await res.text();\n\nfunction tag(block, names) {\n  for (const name of names) {\n    const re = new RegExp(`<[^>]*:?${name}[^>]*>([\\\\s\\\\S]*?)<\\\\/[^>]*:?${name}>`, 'i');\n    const m = block.match(re);\n    if (m) return clean(m[1]);\n  }\n  return '';\n}\nfunction clean(s) {\n  return String(s || '')\n    .replace(/<!\\[CDATA\\[/g, '')\n    .replace(/\\]\\]>/g, '')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/&amp;/g, '&')\n    .replace(/&lt;/g, '<')\n    .replace(/&gt;/g, '>')\n    .replace(/&quot;/g, '\"')\n    .replace(/&#39;/g, \"'\")\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\nfunction link(block) {\n  const m = block.match(/<link[^>]+href=[\"']([^\"']+)[\"']/i);\n  return m ? m[1] : '';\n}\nfunction amount(text) {\n  const m = text.match(/(?:importe|presupuesto|valor estimado)[^\\d]{0,30}([\\d.]+,\\d{2}|[\\d.]+)/i);\n  if (!m) return 0;\n  return Number(m[1].replace(/\\./g, '').replace(',', '.')) || 0;\n}\nfunction includesAny(text, arr) {\n  if (!arr || arr.length === 0) return true;\n  const t = text.toLowerCase();\n  return arr.some(x => t.includes(x));\n}\nfunction excludesAll(text, arr) {\n  if (!arr || arr.length === 0) return true;\n  const t = text.toLowerCase();\n  return !arr.some(x => t.includes(x));\n}\n\nconst entries = [...xml.matchAll(/<entry[\\s\\S]*?<\\/entry>/gi)].map(m => m[0]);\nconst out = [];\n\nfor (const e of entries) {\n  const title = tag(e, ['title']);\n  const summary = tag(e, ['summary', 'content']);\n  const id = tag(e, ['id']) || link(e) || title;\n  const updated = tag(e, ['updated', 'published']);\n  const url = link(e);\n  const text = `${title} ${summary} ${id}`;\n  const importe = amount(text);\n\n  if (!includesAny(text, cfg.keywords)) continue;\n  if (!excludesAll(text, cfg.exclude_keywords)) continue;\n  if (cfg.provincias?.length && !includesAny(text, cfg.provincias)) continue;\n  if (cfg.cpvs?.length && !includesAny(text, cfg.cpvs)) continue;\n  if (cfg.importe_min && importe && importe < cfg.importe_min) continue;\n\n  out.push({ json: { id, title, summary, updated, url, importe, email_destino: cfg.email_destino } });\n  if (out.length >= cfg.max_resultados) break;\n}\n\nreturn out;\n"
+        "url": "={{$json.feed_url}}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
       },
-      "id": "633443f5-5424-4d77-b932-a29e89cd3c3e",
-      "name": "Descargar y filtrar ATOM",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
       "position": [
-        704,
-        112
-      ]
+        672,
+        96
+      ],
+      "id": "6e1eebd2-6d64-4823-a76c-91a251c4a881",
+      "name": "HTTP Request"
     },
     {
       "parameters": {
-        "jsCode": "\n// Agrupa todos los resultados en un único email HTML.\nconst items = $input.all();\nif (items.length === 0) return [];\n\nconst to = items[0].json.email_destino;\nconst rows = items.map((i, idx) => {\n  const j = i.json;\n  return `\n    <li style=\"margin-bottom:16px\">\n      <strong>${j.title || 'Sin título'}</strong><br>\n      Fecha: ${j.updated || '-'}<br>\n      Importe detectado: ${j.importe || '-'}<br>\n      ${j.url ? `<a href=\"${j.url}\">Abrir licitación</a><br>` : ''}\n      <small>${(j.summary || '').slice(0, 500)}</small>\n    </li>`;\n}).join('');\n\nreturn [{\n  json: {\n    to,\n    subject: `Nuevas licitaciones encontradas: ${items.length}`,\n    html: `<h2>Nuevas licitaciones encontradas</h2><ol>${rows}</ol>`,\n    count: items.length\n  }\n}];\n"
+        "outputPrefix": "data_"
       },
-      "id": "2aad6286-8e05-4d3d-a946-d65acb47c73a",
-      "name": "Preparar email",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.compression",
+      "typeVersion": 1.1,
       "position": [
-        944,
-        112
-      ]
+        896,
+        96
+      ],
+      "id": "aff6ad57-1b89-4bcc-a9aa-63584954fca0",
+      "name": "Compression"
     },
     {
       "parameters": {
-        "sendTo": "={{$json.to}}",
-        "subject": "={{$json.subject}}",
-        "message": "={{$json.html}}",
+        "operation": "text",
+        "binaryPropertyName": "data_1",
         "options": {}
       },
-      "id": "3faf3512-c8d7-4779-845d-0633fd5d74d1",
-      "name": "Enviar Gmail",
-      "type": "n8n-nodes-base.gmail",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        96
+      ],
+      "id": "8a5c3620-2d8e-4b90-a1db-7db0fc600596",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.xml",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        96
+      ],
+      "id": "0715d1e9-dea7-45ad-aab4-33965d7f39b4",
+      "name": "XML"
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Normalizar configuración').first().json;\nconst xml = $input.first().json;\n\nconst feed = xml.feed || xml;\nlet entries = feed.entry || [];\n\nif (!Array.isArray(entries)) {\n  entries = [entries];\n}\n\nconst keywords = config.keywords || [];\nconst excludeKeywords = config.exclude_keywords || [];\nconst provincias = config.provincias || [];\nconst cpvs = config.cpvs || [];\nconst maxResultados = Number(config.max_resultados || 25);\n\nfunction textOf(value) {\n  if (!value) return '';\n  if (typeof value === 'string') return value;\n  if (value._) return value._;\n  if (value['#text']) return value['#text'];\n  return JSON.stringify(value);\n}\n\nconst resultados = entries\n  .map(entry => {\n    const title = textOf(entry.title);\n    const summary = textOf(entry.summary);\n    const id = textOf(entry.id);\n    const updated = textOf(entry.updated);\n    const content = textOf(entry.content);\n\n    let link = '';\n    if (Array.isArray(entry.link)) {\n      const alt = entry.link.find(l => l.rel === 'alternate') || entry.link[0];\n      link = alt.href || '';\n    } else if (entry.link) {\n      link = entry.link.href || '';\n    }\n\n    const texto = `${title} ${summary} ${content}`.toLowerCase();\n\n    const pasaKeyword =\n      keywords.length === 0 ||\n      keywords.some(k => texto.includes(String(k).toLowerCase()));\n\n    const pasaExclusion =\n      excludeKeywords.length === 0 ||\n      !excludeKeywords.some(k => texto.includes(String(k).toLowerCase()));\n\n    const pasaProvincia =\n      provincias.length === 0 ||\n      provincias.some(p => texto.includes(String(p).toLowerCase()));\n\n    const pasaCpv =\n      cpvs.length === 0 ||\n      cpvs.some(cpv => texto.includes(String(cpv).toLowerCase()));\n\n    return {\n      id,\n      title,\n      summary,\n      updated,\n      link,\n      match: pasaKeyword && pasaExclusion && pasaProvincia && pasaCpv,\n    };\n  })\n  .filter(item => item.match)\n  .slice(0, maxResultados);\n\nreturn resultados.map(r => ({ json: r }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        96
+      ],
+      "id": "4f912562-d85f-4908-8b10-139c912607ae",
+      "name": "Filtrar licitaciones"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst config = $('Normalizar configuración').first().json;\n\nconst rows = items.map((item, index) => {\n  const r = item.json;\n  return `\n    <tr>\n      <td>${index + 1}</td>\n      <td><strong>${r.title || ''}</strong><br>${r.summary || ''}</td>\n      <td><a href=\"${r.link || '#'}\">Ver licitación</a></td>\n      <td>${r.updated || ''}</td>\n    </tr>\n  `;\n}).join('');\n\nconst html = `\n<h2>Nuevas licitaciones encontradas</h2>\n<p>Se han encontrado <strong>${items.length}</strong> licitaciones.</p>\n\n<table border=\"1\" cellpadding=\"8\" cellspacing=\"0\">\n  <thead>\n    <tr>\n      <th>#</th>\n      <th>Licitación</th>\n      <th>Enlace</th>\n      <th>Fecha</th>\n    </tr>\n  </thead>\n  <tbody>\n    ${rows}\n  </tbody>\n</table>\n`;\n\nreturn [{\n  json: {\n    email_destino: config.email_destino,\n    subject: `Alertas licitaciones: ${items.length} resultados`,\n    html,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        96
+      ],
+      "id": "fafa96ed-9fc2-4138-919c-6414d3c40939",
+      "name": "Preparar email"
+    },
+    {
+      "parameters": {
+        "fromEmail": "studiovisual.xs@gmail.com",
+        "toEmail": "={{$json.email_destino}}",
+        "subject": "={{$json.subject}}",
+        "html": "={{$json.html}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
       "position": [
-        1184,
-        112
+        2016,
+        96
       ],
-      "webhookId": "80618297-44e5-4bfb-99b8-3969ecd735f2"
+      "id": "d339387b-af2c-42ed-91aa-bba81d891ae2",
+      "name": "Send an Email",
+      "webhookId": "416d9d28-4741-4a5f-93b1-3bed201d5ffe",
+      "credentials": {
+        "smtp": {
+          "id": "7s7pTTjulVSpVWUt",
+          "name": "SMTP account"
+        }
+      }
     }
   ],
   "connections": {
@@ -156,14 +231,58 @@
       "main": [
         [
           {
-            "node": "Descargar y filtrar ATOM",
+            "node": "HTTP Request",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Descargar y filtrar ATOM": {
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Compression",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compression": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "XML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "XML": {
+      "main": [
+        [
+          {
+            "node": "Filtrar licitaciones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar licitaciones": {
       "main": [
         [
           {
@@ -178,7 +297,7 @@
       "main": [
         [
           {
-            "node": "Enviar Gmail",
+            "node": "Send an Email",
             "type": "main",
             "index": 0
           }
@@ -188,14 +307,20 @@
   },
   "settings": {
     "executionOrder": "v1",
-    "binaryMode": "separate"
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "UslOMwwiH98sBT9V",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
   },
   "staticData": null,
-  "meta": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
   "pinData": {},
-  "versionId": "5221e500-051f-4334-93f6-94066fc72473",
+  "versionId": "c1dfc131-bc98-4d6a-9556-3f4a8ef02120",
   "activeVersionId": null,
-  "versionCounter": 2,
+  "versionCounter": 50,
   "triggerCount": 0,
   "tags": [],
   "shared": [
