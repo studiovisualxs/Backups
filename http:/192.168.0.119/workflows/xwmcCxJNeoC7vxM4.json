@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-09T13:50:31.128Z",
+  "updatedAt": "2026-05-09T15:59:57.502Z",
   "createdAt": "2026-05-09T10:32:21.122Z",
   "id": "xwmcCxJNeoC7vxM4",
   "name": "Alertas PLACSP",
@@ -174,7 +174,9 @@
         "toEmail": "={{$json.email_destino}}",
         "subject": "={{$json.subject}}",
         "html": "={{$json.html}}",
-        "options": {}
+        "options": {
+          "appendAttribution": false
+        }
       },
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
@@ -318,9 +320,9 @@
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
-  "versionId": "c1dfc131-bc98-4d6a-9556-3f4a8ef02120",
+  "versionId": "6a0ae33f-877a-4acf-a58e-7b20757c158b",
   "activeVersionId": null,
-  "versionCounter": 50,
+  "versionCounter": 51,
   "triggerCount": 0,
   "tags": [],
   "shared": [
