@@ -4,7 +4,7 @@
   "id": "Y5jxU2dniA8vz357",
   "name": "Alertas PLACSP de 21a40 data",
   "description": null,
-  "active": false,
+  "active": true,
   "isArchived": false,
   "nodes": [
     {
@@ -534,15 +534,19 @@
     "callerPolicy": "workflowsFromSameOwner",
     "availableInMCP": false
   },
-  "staticData": null,
+  "staticData": {
+    "node:Cada día": {
+      "recurrenceRules": []
+    }
+  },
   "meta": {
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
   "versionId": "57eed42c-3fe4-4b93-99fa-be5c49f92429",
-  "activeVersionId": null,
-  "versionCounter": 12,
-  "triggerCount": 0,
+  "activeVersionId": "57eed42c-3fe4-4b93-99fa-be5c49f92429",
+  "versionCounter": 15,
+  "triggerCount": 1,
   "tags": [],
   "shared": [
     {
@@ -564,7 +568,7 @@
     }
   ],
   "versionMetadata": {
-    "name": null,
-    "description": null
+    "name": "Version 57eed42c",
+    "description": ""
   }
 }
