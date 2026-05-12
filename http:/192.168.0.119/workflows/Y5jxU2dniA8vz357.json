@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-11T10:32:44.495Z",
+  "updatedAt": "2026-05-12T06:52:23.101Z",
   "createdAt": "2026-05-11T09:30:08.411Z",
   "id": "Y5jxU2dniA8vz357",
   "name": "Alertas PLACSP de 21a40 data",
@@ -13,7 +13,7 @@
           "interval": [
             {
               "field": "hours",
-              "hoursInterval": 12,
+              "hoursInterval": 24,
               "triggerAtMinute": 15
             }
           ]
@@ -543,9 +543,9 @@
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
-  "versionId": "57eed42c-3fe4-4b93-99fa-be5c49f92429",
-  "activeVersionId": "57eed42c-3fe4-4b93-99fa-be5c49f92429",
-  "versionCounter": 15,
+  "versionId": "1b6b4834-240e-41ad-8d1b-580af3728750",
+  "activeVersionId": "1b6b4834-240e-41ad-8d1b-580af3728750",
+  "versionCounter": 18,
   "triggerCount": 1,
   "tags": [],
   "shared": [
@@ -568,7 +568,7 @@
     }
   ],
   "versionMetadata": {
-    "name": "Version 57eed42c",
+    "name": "Version 1b6b4834",
     "description": ""
   }
 }
