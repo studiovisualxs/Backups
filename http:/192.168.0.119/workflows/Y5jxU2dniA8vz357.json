@@ -536,7 +536,9 @@
   },
   "staticData": {
     "node:Cada día": {
-      "recurrenceRules": []
+      "recurrenceRules": [
+        0
+      ]
     }
   },
   "meta": {
@@ -545,7 +547,7 @@
   "pinData": {},
   "versionId": "1b6b4834-240e-41ad-8d1b-580af3728750",
   "activeVersionId": "1b6b4834-240e-41ad-8d1b-580af3728750",
-  "versionCounter": 18,
+  "versionCounter": 19,
   "triggerCount": 1,
   "tags": [],
   "shared": [
