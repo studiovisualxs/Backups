@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-12T19:34:29.072Z",
+  "updatedAt": "2026-05-13T06:33:13.491Z",
   "createdAt": "2026-05-12T19:34:29.072Z",
   "id": "73FqJstHWn1M3axU",
   "name": "Facebook IA a Google Sheets - Base",
@@ -27,9 +27,38 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        496,
+        464,
         240
       ]
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        672,
+        240
+      ],
+      "id": "df0ff4b6-a468-4534-8a37-5d5a27d867b1",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleApi": {
+          "id": "WqqKIfHDEaQErgAl",
+          "name": "Google Service Account account"
+        }
+      }
     }
   ],
   "connections": {
@@ -43,6 +72,17 @@
           }
         ]
       ]
+    },
+    "Test de importacion": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -50,11 +90,13 @@
     "binaryMode": "separate"
   },
   "staticData": null,
-  "meta": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
   "pinData": {},
-  "versionId": "8ce817c7-1f45-4331-89c7-e95c1503cd80",
+  "versionId": "e50e0bc4-6d56-4dc6-b971-c65599f91f46",
   "activeVersionId": null,
-  "versionCounter": 1,
+  "versionCounter": 3,
   "triggerCount": 0,
   "tags": [],
   "shared": [
