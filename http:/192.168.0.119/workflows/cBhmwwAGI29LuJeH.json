@@ -1,10 +1,10 @@
 {
-  "updatedAt": "2026-05-14T09:22:52.058Z",
+  "updatedAt": "2026-05-14T18:24:37.127Z",
   "createdAt": "2026-05-13T20:39:25.429Z",
   "id": "cBhmwwAGI29LuJeH",
-  "name": "Facebook IA a Google Sheets - TODOS LOS POSTS FIX 2",
+  "name": "Facebook IA a Google Sheets - TODOS LOS POSTS v2",
   "description": null,
-  "active": false,
+  "active": true,
   "isArchived": false,
   "nodes": [
     {
@@ -41,7 +41,7 @@
       "typeVersion": 4.7,
       "position": [
         -128,
-        -688
+        -784
       ],
       "id": "b1885d65-16b7-4b83-9bb4-9c34770131ab",
       "name": "Get row(s) in sheet",
@@ -81,7 +81,7 @@
       "typeVersion": 2.3,
       "position": [
         96,
-        -688
+        -784
       ],
       "id": "529d0d51-7f7d-49e0-8d5d-9c8b095925a2",
       "name": "Filter"
@@ -89,10 +89,20 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://browserless:3000/scrape?token=n8n_browserless_2026",
+        "url": "http://browserless:3000/function?token=n8n_browserless_2026&timeout=120000",
         "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ { url: $json.scrape_url, elements: [{ selector: 'body' }] } }}",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "context",
+              "value": "={{ {\n  url: $json.scrape_url,\n  nombre: $json.nombre,\n  pagina_url: $json.url,\n  palabras_clave: $json.palabras_clave,\n  cookies: [\n    { name: 'c_user', value: $json.fb_c_user, domain: '.facebook.com', path: '/' },\n    { name: 'xs', value: $json.fb_xs, domain: '.facebook.com', path: '/' },\n    { name: 'datr', value: $json.fb_datr, domain: '.facebook.com', path: '/' },\n    { name: 'fr', value: $json.fb_fr, domain: '.facebook.com', path: '/' },\n    { name: 'sb', value: $json.fb_sb, domain: '.facebook.com', path: '/' }\n  ]\n} }}"
+            },
+            {
+              "name": "code",
+              "value": "=module.exports = async ({ page, context }) => {\n  /*\n   * CONFIGURACIÓN RÁPIDA\n   * Cambia este número si quieres extraer más o menos posts visibles.\n   */\n  const MAX_POSTS_A_EXTRAER = 30;\n\n  /*\n   * Más scrolls = más posts cargados, pero tarda más.\n   */\n  const SCROLL_PASADAS = 20;\n  const ESPERA_INICIAL_MS = 8000;\n  const ESPERA_ENTRE_SCROLL_MS = 2500;\n\n  await page.setViewport({ width: 1365, height: 2400 });\n\n  if (context.cookies && Array.isArray(context.cookies)) {\n    await page.setCookie(...context.cookies);\n  }\n\n  await page.goto(context.url, {\n    waitUntil: 'domcontentloaded',\n    timeout: 120000,\n  });\n\n  await page.waitForTimeout(ESPERA_INICIAL_MS);\n\n  // Scroll para cargar más publicaciones\n  for (let i = 0; i < SCROLL_PASADAS; i++) {\n    await page.evaluate(() => window.scrollBy(0, window.innerHeight * 0.9));\n    await page.waitForTimeout(ESPERA_ENTRE_SCROLL_MS);\n  }\n\n  // Intentar abrir textos truncados: See more / Ver más / Mostrar más\n  for (let i = 0; i < 5; i++) {\n    await page.evaluate(() => {\n      const labels = [\n        'See more',\n        'Ver más',\n        'Mostrar más',\n        'Ver traducción',\n        'See translation',\n      ];\n\n      const nodes = [...document.querySelectorAll('div[role=\"button\"], span, a')];\n\n      for (const node of nodes) {\n        const txt = String(node.innerText || node.textContent || '').trim();\n\n        if (labels.includes(txt)) {\n          try {\n            node.click();\n          } catch (e) {}\n        }\n      }\n    });\n\n    await page.waitForTimeout(1500);\n  }\n\n  const data = await page.evaluate((context, maxPosts) => {\n    function cleanText(s) {\n      return String(s || '')\n        .replace(/\\s+/g, ' ')\n        .replace(/Ver original · Califica esta traducción/gi, '')\n        .replace(/Ver original/gi, '')\n        .replace(/Califica esta traducción/gi, '')\n        .replace(/See translation/gi, '')\n        .replace(/Rate this translation/gi, '')\n        .trim();\n    }\n\n    function removeUiNoise(s) {\n      return String(s || '')\n        .replace(/\\bLike\\b/gi, '')\n        .replace(/\\bComment\\b/gi, '')\n        .replace(/\\bShare\\b/gi, '')\n        .replace(/\\bSend\\b/gi, '')\n        .replace(/\\bFollow\\b/gi, '')\n        .replace(/\\bAll reactions:\\s*\\d+/gi, '')\n        .replace(/\\bView more comments\\b/gi, '')\n        .replace(/\\bWrite a comment\\b/gi, '')\n        .replace(/\\s+/g, ' ')\n        .trim();\n    }\n\n    function isBadText(t) {\n      return /Forgot Account|Join Facebook|Log in|Create new account|Recover|Cookies|Meta ©|Privacy|Terms|Messenger|Watch|Marketplace|Gaming|Fundraisers/i.test(t);\n    }\n\n    function isProbablyCssGarbage(t) {\n      return /x[a-z0-9]{5,}\\s+x[a-z0-9]{5,}\\s+x[a-z0-9]{5,}/i.test(t);\n    }\n\n    function hasUsefulSignal(t) {\n      const lower = t.toLowerCase();\n\n      return (\n        lower.includes('prompt') ||\n        lower.includes('chatgpt') ||\n        lower.includes('upload your image') ||\n        lower.includes('sube tu imagen') ||\n        lower.includes('abrir chatgpt') ||\n        lower.includes('open chatgpt') ||\n        lower.includes('retrato') ||\n        lower.includes('render') ||\n        lower.includes('imagen') ||\n        lower.includes('diseño') ||\n        lower.includes('branding') ||\n        lower.includes('logo') ||\n        lower.includes('portrait') ||\n        lower.includes('create') ||\n        lower.includes('image') ||\n        lower.includes('photoshop') ||\n        lower.includes('tutorial')\n      );\n    }\n\n    function isUsefulText(t) {\n      if (!t) return false;\n      if (t.length < 40) return false;\n      if (isBadText(t)) return false;\n      if (isProbablyCssGarbage(t)) return false;\n      return true;\n    }\n\n    function bestImage(root) {\n      const imgs = [...root.querySelectorAll('img')]\n        .map(img => img.currentSrc || img.src || '')\n        .filter(Boolean)\n        .filter(src => /^https?:\\/\\//i.test(src))\n        .filter(src => /scontent|fbcdn/i.test(src))\n        .filter(src => !/hsts-pixel|emoji|static\\.xx\\.fbcdn\\.net|safe_image|p64x64|s64x64|c0\\.0\\./i.test(src));\n\n      imgs.sort((a, b) => {\n        const getSize = (u) => {\n          const m = u.match(/s(\\d+)x(\\d+)/i);\n          if (!m) return 0;\n          return Number(m[1]) * Number(m[2]);\n        };\n\n        return getSize(b) - getSize(a);\n      });\n\n      return imgs[0] || '';\n    }\n\n    function cleanFacebookPostUrl(url) {\n      if (!url) return context.url;\n\n      try {\n        const u = new URL(url);\n        u.searchParams.delete('__cft__[0]');\n        u.searchParams.delete('__tn__');\n        u.searchParams.delete('mibextid');\n        u.searchParams.delete('ref');\n        u.searchParams.delete('refid');\n        return u.toString();\n      } catch {\n        return url;\n      }\n    }\n\n    function bestPostUrl(root) {\n      const links = [...root.querySelectorAll('a')]\n        .map(a => a.href || '')\n        .filter(Boolean)\n        .filter(href =>\n          href.includes('/photo') ||\n          href.includes('fbid=') ||\n          href.includes('/posts/') ||\n          href.includes('/reel/') ||\n          href.includes('story.php') ||\n          href.includes('permalink.php')\n        );\n\n      return cleanFacebookPostUrl(links[0] || context.url);\n    }\n\n    function extractBetterPostText(root) {\n      const allTexts = [];\n\n      // Primero intentamos leer textos internos concretos, no todo el bloque gigante.\n      const possibleTextNodes = [\n        ...root.querySelectorAll('[dir=\"auto\"]'),\n        ...root.querySelectorAll('span'),\n        ...root.querySelectorAll('div')\n      ];\n\n      for (const node of possibleTextNodes) {\n        const text = removeUiNoise(cleanText(node.innerText || node.textContent || ''));\n\n        if (!text) continue;\n        if (text.length < 15) continue;\n        if (isBadText(text)) continue;\n        if (isProbablyCssGarbage(text)) continue;\n\n        allTexts.push(text);\n      }\n\n      // Unimos textos evitando duplicados\n      const unique = [];\n      const seen = new Set();\n\n      for (const t of allTexts) {\n        const key = t.toLowerCase();\n\n        if (seen.has(key)) continue;\n        seen.add(key);\n\n        // Evitar textos que son solo botones o contadores\n        if (/^(like|comment|share|send|follow|\\d+|·)$/i.test(t)) continue;\n\n        unique.push(t);\n      }\n\n      // Buscamos el bloque que contiene el prompt completo o el texto más útil\n      const promptLike = unique.filter(t => {\n        const l = t.toLowerCase();\n        return (\n          l.includes('prompt') ||\n          l.includes('chatgpt') ||\n          l.includes('upload your image') ||\n          l.includes('sube tu imagen') ||\n          l.includes('open chatgpt') ||\n          l.includes('abrir chatgpt')\n        );\n      });\n\n      if (promptLike.length) {\n        return promptLike\n          .sort((a, b) => b.length - a.length)\n          .slice(0, 4)\n          .join('\\n\\n')\n          .trim();\n      }\n\n      // Fallback: texto del artículo limpio\n      return removeUiNoise(cleanText(root.innerText || '')).slice(0, 5000);\n    }\n\n    function scoreText(text, image) {\n      const lower = text.toLowerCase();\n      let score = 0;\n\n      if (lower.includes('prompt')) score += 80;\n      if (lower.includes('chatgpt')) score += 60;\n      if (lower.includes('upload your image')) score += 50;\n      if (lower.includes('sube tu imagen')) score += 50;\n      if (lower.includes('open chatgpt')) score += 50;\n      if (lower.includes('abrir chatgpt')) score += 50;\n      if (lower.includes('retrato')) score += 20;\n      if (lower.includes('render')) score += 15;\n      if (lower.includes('photoshop')) score += 15;\n      if (lower.includes('tutorial')) score += 15;\n      if (lower.includes('diseño')) score += 10;\n      if (lower.includes('branding')) score += 10;\n      if (image) score += 25;\n\n      score += Math.min(text.length / 100, 30);\n\n      if (isBadText(text)) score -= 100;\n      if (isProbablyCssGarbage(text)) score -= 100;\n\n      return score;\n    }\n\n    const candidates = [];\n\n    const articleNodes = [\n      ...document.querySelectorAll('[role=\"article\"]'),\n      ...document.querySelectorAll('div[data-pagelet*=\"FeedUnit\"]'),\n      ...document.querySelectorAll('div')\n    ];\n\n    for (const node of articleNodes) {\n      const text = extractBetterPostText(node);\n\n      if (!isUsefulText(text)) continue;\n\n      const image = bestImage(node);\n      const postUrl = bestPostUrl(node);\n      const score = scoreText(text, image);\n\n      if (text.length > 8000) continue;\n\n      candidates.push({\n        texto_limpio: text.slice(0, 6000),\n        imagen_url: image,\n        post_url: postUrl,\n        score,\n        has_useful_signal: hasUsefulSignal(text),\n      });\n    }\n\n    candidates.sort((a, b) => b.score - a.score);\n\n    const bodyText = cleanText(document.body.innerText || '');\n\n    return {\n      nombre: context.nombre,\n      url: context.pagina_url,\n      palabras_clave: context.palabras_clave,\n      scrape_url: context.url,\n      page_title: document.title,\n      debug_candidates_count: candidates.length,\n      debug_body_text: bodyText.slice(0, 5000),\n      posts: candidates.slice(0, maxPosts),\n    };\n  }, context, MAX_POSTS_A_EXTRAER);\n\n  return {\n    data,\n    type: 'application/json',\n  };\n};"
+            }
+          ]
+        },
         "options": {
           "timeout": 120000
         }
@@ -100,21 +110,21 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        544,
-        -688
+        768,
+        -784
       ],
       "id": "ac90596c-527e-4ebe-85d4-7a1845ec58f8",
       "name": "Browserless Scraper"
     },
     {
       "parameters": {
-        "jsCode": "function decodeBasic(s) {\n  return String(s || '')\n    .replace(/\\\\\\//g, '/')\n    .replace(/\\\\u0025/g, '%')\n    .replace(/\\\\u0026/g, '&')\n    .replace(/\\\\u003d/g, '=')\n    .replace(/\\\\u002F/gi, '/')\n    .replace(/&amp;/g, '&')\n    .replace(/&quot;/g, '\"')\n    .replace(/&#039;/g, \"'\")\n    .replace(/&lt;/g, '<')\n    .replace(/&gt;/g, '>')\n    .replace(/&nbsp;/g, ' ');\n}\n\nfunction cleanText(s) {\n  return decodeBasic(s)\n    .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')\n    .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n    .replace(/<svg[\\s\\S]*?<\\/svg>/gi, ' ')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/Ver original · Califica esta traducción/gi, '')\n    .replace(/Ver original/gi, '')\n    .replace(/Califica esta traducción/gi, '')\n    .replace(/See translation/gi, '')\n    .replace(/Rate this translation/gi, '')\n    .replace(/\\bLike\\b|\\bComment\\b|\\bShare\\b/gi, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nfunction simpleHash(str) {\n  str = String(str || '');\n  let h1 = 0xdeadbeef;\n  let h2 = 0x41c6ce57;\n  for (let i = 0; i < str.length; i++) {\n    const ch = str.charCodeAt(i);\n    h1 = Math.imul(h1 ^ ch, 2654435761);\n    h2 = Math.imul(h2 ^ ch, 1597334677);\n  }\n  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);\n  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);\n  return ((h2 >>> 0).toString(16) + (h1 >>> 0).toString(16)).slice(0, 24);\n}\n\nfunction absoluteFacebookUrl(url) {\n  url = decodeBasic(url).trim();\n  if (!url) return '';\n  if (url.startsWith('/')) return 'https://mbasic.facebook.com' + url;\n  return url;\n}\n\nfunction normalizePostUrl(url) {\n  url = absoluteFacebookUrl(url);\n  if (!url) return '';\n  try {\n    const u = new URL(url);\n    ['__tn__','refid','ref','paipv','eav','mibextid','locale','comment_id','acontext','av'].forEach(p => u.searchParams.delete(p));\n    u.hash = '';\n    return u.toString();\n  } catch {\n    return url;\n  }\n}\n\nfunction normalizeImageUrl(u) {\n  return decodeBasic(u)\n    .replace(/\\\\u0026/g, '&')\n    .replace(/\\s+/g, '')\n    .trim();\n}\n\nfunction scoreImage(url) {\n  const u = String(url || '');\n  let score = 0;\n  if (/scontent|fbcdn/i.test(u)) score += 8;\n  if (/t39\\.30808|safe_image|p960x960|p720x720|p1080x1080|_n\\.(jpg|jpeg|png|webp)/i.test(u)) score += 5;\n  if (/\\.jpg|\\.jpeg|\\.png|\\.webp/i.test(u)) score += 2;\n  if (u.length > 180) score += 1;\n  if (/p50x50|p64x64|s75x75|s100x100|emoji|sprite|icon|logo|profile|static\\.xx\\.fbcdn\\.net|rsrc\\.php/i.test(u)) score -= 12;\n  return score;\n}\n\nfunction extractImage(block) {\n  const h = decodeBasic(block);\n  const candidates = [];\n  let m;\n\n  const metaRegex = /<meta[^>]+(?:property|name)=[\"'](?:og:image|twitter:image)[\"'][^>]+content=[\"']([^\"']+)[\"']/gi;\n  while ((m = metaRegex.exec(h)) !== null) candidates.push(m[1]);\n\n  const imgRegex = /<img[^>]+>/gi;\n  while ((m = imgRegex.exec(h)) !== null) {\n    const tag = m[0];\n    const src = tag.match(/\\s(?:src|data-src|data-original)=[\"']([^\"']+)[\"']/i)?.[1] || '';\n    if (src) candidates.push(src);\n\n    const srcset = tag.match(/\\ssrcset=[\"']([^\"']+)[\"']/i)?.[1] || '';\n    if (srcset) {\n      for (const part of srcset.split(',')) {\n        const candidate = part.trim().split(/\\s+/)[0];\n        if (candidate) candidates.push(candidate);\n      }\n    }\n  }\n\n  const styleRegex = /background-image\\s*:\\s*url\\(([^)]+)\\)/gi;\n  while ((m = styleRegex.exec(h)) !== null) candidates.push(m[1].replace(/^['\"]|['\"]$/g, ''));\n\n  const urlRegex = /https?:\\\\?\\/\\\\?\\/[^\"'<>\\s)]+?(?:\\.jpg|\\.jpeg|\\.png|\\.webp)(?:\\?[^\"'<>\\s)]*)?/gi;\n  while ((m = urlRegex.exec(h)) !== null) candidates.push(m[0]);\n\n  const cleaned = [...new Set(candidates.map(normalizeImageUrl))]\n    .filter(Boolean)\n    .filter(u => /^https?:\\/\\//i.test(u))\n    .filter(u => scoreImage(u) > -2);\n\n  cleaned.sort((a, b) => scoreImage(b) - scoreImage(a));\n  return cleaned[0] || '';\n}\n\nfunction todayMadrid() {\n  return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });\n}\n\nfunction firstResult(response) {\n  return response.data?.[0]?.results?.[0] || response.data?.results?.[0] || response.results?.[0] || response[0]?.results?.[0] || {};\n}\n\nfunction looksBlockedOnly(text, html) {\n  const t = String(text || '').toLowerCase();\n  const hasPostSignals = /story_fbid|\\/posts\\/|photo\\.php|fbid=|scontent|fbcdn|abrir chatgpt|prompt|midjourney|stable diffusion|branding|logo|diseño|design/i.test(html || text || '');\n  if (hasPostSignals) return false;\n  return /log in|email or phone|forgot password|create new account|allow the use of cookies|cookies from facebook|cookies from other companies|join facebook or log in|inicia sesión|crear cuenta/i.test(t);\n}\n\nfunction usefulText(text, imageUrl, keywords) {\n  const t = String(text || '');\n  const loginNoiseOnly = /^(facebook|log in|join facebook|create new account|forgot password|cookies|privacy|terms|advertising|meta)+$/i.test(t.replace(/\\s+/g, ' ').trim());\n  if (loginNoiseOnly) return false;\n  if (t.length < (imageUrl ? 25 : 60)) return false;\n\n  const kw = String(keywords || '').split(',').map(s => s.trim()).filter(Boolean);\n  const hasKeyword = kw.some(k => new RegExp(k.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&'), 'i').test(t));\n\n  return Boolean(\n    hasKeyword ||\n    /prompt|chatgpt|midjourney|stable diffusion|dall[- ]?e|imagen|image|retrato|portrait|branding|logo|diseño|design|abrir chatgpt|sube tu imagen/i.test(t) ||\n    imageUrl\n  );\n}\n\nconst browserlessItems = $input.all();\nconst sourceItems = $('Preparar URL Scrape').all();\nconst out = [];\n\nfor (let index = 0; index < browserlessItems.length; index++) {\n  const item = browserlessItems[index];\n  const source = sourceItems[index]?.json || {};\n  const response = item.json || {};\n  const result = firstResult(response);\n\n  const fullJson = JSON.stringify(response);\n  const rawText = result.text || response.text || response.data?.[0]?.text || '';\n  const rawHtml = result.html || response.html || response.data?.[0]?.html || fullJson || '';\n  const html = decodeBasic(rawHtml);\n  const pageText = cleanText(rawText || html).slice(0, 12000);\n\n  const base = {\n    row_number: source.row_number,\n    nombre: source.nombre,\n    cuenta: source.nombre,\n    cuenta_url: source.cuenta_url || source.url,\n    url: source.url,\n    original_url: source.original_url || source.url,\n    scrape_url: source.scrape_url || source.url,\n    tipo: source.tipo,\n    activo: source.activo,\n    palabras_clave: source.palabras_clave,\n    ultima_revision: todayMadrid(),\n    debug_text_preview: pageText.slice(0, 800),\n  };\n\n  if (!rawHtml || looksBlockedOnly(pageText, html)) {\n    out.push({ json: { ...base, scrape_ok: false, post_nuevo: false, estado: 'LOGIN_O_BLOQUEO', scrape_status: 'LOGIN_O_BLOQUEO', motivo: 'Facebook devolvió login/cookies/bloqueo', scrape_motivo: 'Facebook devolvió login/cookies/bloqueo', texto_limpio: pageText.slice(0, 1000), imagen_url: '' } });\n    continue;\n  }\n\n  const candidates = [];\n\n  // 1) Bloques alrededor de enlaces de post reales.\n  const linkRegex = /<a[^>]+href=[\"']([^\"']*(?:story\\.php|\\/posts\\/|\\/photos\\/|permalink\\.php|\\/photo\\.php|fbid=)[^\"']*)[\"'][^>]*>[\\s\\S]*?<\\/a>/gi;\n  let m;\n\n  while ((m = linkRegex.exec(html)) !== null) {\n    const postUrl = normalizePostUrl(m[1]);\n    if (!postUrl) continue;\n\n    const start = Math.max(0, m.index - 5000);\n    const end = Math.min(html.length, m.index + 12000);\n    const block = html.slice(start, end);\n    const text = cleanText(block).slice(0, 6000);\n    const imageUrl = extractImage(block);\n\n    if (!usefulText(text, imageUrl, source.palabras_clave)) continue;\n\n    candidates.push({\n      post_url: postUrl,\n      texto_limpio: text,\n      imagen_url: imageUrl,\n      post_hash: simpleHash(`${postUrl}|${text}|${imageUrl}`),\n    });\n  }\n\n  // 2) Fallback para páginas donde mbasic no expone enlaces claros pero sí texto+imagen visibles.\n  if (candidates.length === 0) {\n    const imageUrl = extractImage(`${html}\\n${fullJson}`);\n    if (usefulText(pageText, imageUrl, source.palabras_clave)) {\n      const postUrl = source.scrape_url || source.url;\n      candidates.push({\n        post_url: postUrl,\n        texto_limpio: pageText.slice(0, 6000),\n        imagen_url: imageUrl,\n        post_hash: simpleHash(`${postUrl}|${pageText}|${imageUrl}`),\n      });\n    }\n  }\n\n  const unique = new Map();\n  for (const c of candidates) {\n    const key = c.post_url || c.post_hash;\n    if (!unique.has(key)) unique.set(key, c);\n  }\n\n  if (unique.size === 0) {\n    out.push({ json: { ...base, scrape_ok: false, post_nuevo: false, estado: 'SIN_POSTS_UTILES', scrape_status: 'SIN_POSTS_UTILES', motivo: 'No se detectaron posts útiles visibles sin login', scrape_motivo: 'No se detectaron posts útiles visibles sin login', texto_limpio: pageText.slice(0, 1000), imagen_url: extractImage(`${html}\\n${fullJson}`) } });\n    continue;\n  }\n\n  for (const c of unique.values()) {\n    out.push({\n      json: {\n        ...base,\n        url: c.post_url,\n        post_url: c.post_url,\n        post_hash: c.post_hash,\n        ultimo_hash: c.post_hash,\n        texto_limpio: c.texto_limpio,\n        imagen_url: c.imagen_url,\n        scrape_ok: true,\n        scrape_status: 'OK',\n        scrape_motivo: 'Post detectado',\n        estado: 'OK',\n        motivo: 'Post detectado',\n        fecha_detectado: todayMadrid(),\n      },\n    });\n  }\n}\n\nreturn out;\n"
+        "jsCode": "const crypto = require('crypto');\n\n/*\n * CONFIGURACIÓN RÁPIDA\n * Cambia este número si quieres crear PDFs para más o menos posts por ejecución.\n *\n * Ejemplos:\n *  - 5  = máximo 5 PDFs\n *  - 15 = recomendado\n *  - 30 = máximo 30 PDFs\n */\nconst MAX_POSTS_A_PROCESAR = 15;\n\n/*\n * CONFIGURACIÓN DE FILTRO\n * true  = solo guarda posts relacionados con prompts/IA o con tus palabras clave.\n * false = guarda cualquier post visible con texto/imagen útil.\n */\nconst SOLO_POSTS_RELEVANTES = false;\n\nfunction hash(value = '') {\n  return crypto\n    .createHash('sha256')\n    .update(String(value))\n    .digest('hex')\n    .slice(0, 24);\n}\n\nfunction cleanUrl(url = '') {\n  url = String(url || '').trim();\n\n  try {\n    const u = new URL(url);\n\n    // Quitamos parámetros que Facebook cambia constantemente\n    u.searchParams.delete('__cft__[0]');\n    u.searchParams.delete('__tn__');\n    u.searchParams.delete('mibextid');\n    u.searchParams.delete('ref');\n    u.searchParams.delete('refid');\n    u.searchParams.delete('locale');\n\n    return u.origin + u.pathname + (u.search ? u.search : '');\n  } catch {\n    return url.split('?')[0];\n  }\n}\n\nfunction getStablePostId(url = '') {\n  url = String(url || '');\n\n  // Reels: /reel/967376516157967/\n  let m = url.match(/\\/reel\\/(\\d+)/i);\n  if (m) return `reel_${m[1]}`;\n\n  // Fotos: fbid=106748115604529\n  m = url.match(/[?&]fbid=(\\d+)/i);\n  if (m) return `fbid_${m[1]}`;\n\n  // Posts: /posts/123...\n  m = url.match(/\\/posts\\/([^/?#]+)/i);\n  if (m) return `post_${m[1]}`;\n\n  // Stories: story_fbid=123\n  m = url.match(/[?&]story_fbid=(\\d+)/i);\n  if (m) return `story_${m[1]}`;\n\n  // Permalink: permalink.php?story_fbid=123&id=456\n  m = url.match(/permalink\\.php.*?[?&]story_fbid=(\\d+)/i);\n  if (m) return `story_${m[1]}`;\n\n  // Fallback estable: URL limpia\n  return cleanUrl(url);\n}\n\nfunction cleanFinalText(t = '') {\n  return String(t || '')\n    .replace(/\\s+/g, ' ')\n    .replace(/Forgot Account\\?/gi, '')\n    .replace(/Join Facebook/gi, '')\n    .replace(/Log in/gi, '')\n    .replace(/Create new account/gi, '')\n    .replace(/Posts About Reels/gi, '')\n    .replace(/\\bLike\\b/gi, '')\n    .replace(/\\bComment\\b/gi, '')\n    .replace(/\\bShare\\b/gi, '')\n    .replace(/\\bSend\\b/gi, '')\n    .replace(/\\bSee more\\b/gi, '')\n    .replace(/\\bVer más\\b/gi, '')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nfunction isBadPostText(t = '') {\n  if (!t || t.length < 40) return true;\n\n  if (/Forgot Account|Join Facebook|Log in to continue|Create new account|Recover/i.test(t)) {\n    return true;\n  }\n\n  // Clases CSS raras de Facebook\n  if (/x[a-z0-9]{5,}\\s+x[a-z0-9]{5,}\\s+x[a-z0-9]{5,}/i.test(t)) {\n    return true;\n  }\n\n  return false;\n}\n\nfunction scorePost(post) {\n  const text = String(post.texto_limpio || '').toLowerCase();\n  let score = Number(post.score || 0);\n\n  if (text.includes('prompt')) score += 80;\n  if (text.includes('chatgpt')) score += 60;\n  if (text.includes('sube tu imagen')) score += 60;\n  if (text.includes('upload your image')) score += 60;\n  if (text.includes('abrir chatgpt')) score += 60;\n  if (text.includes('open chatgpt')) score += 60;\n  if (text.includes('midjourney')) score += 50;\n  if (text.includes('stable diffusion')) score += 50;\n  if (text.includes('dall-e')) score += 50;\n  if (text.includes('retrato')) score += 30;\n  if (text.includes('portrait')) score += 30;\n  if (text.includes('render')) score += 25;\n  if (text.includes('photoshop')) score += 20;\n  if (text.includes('tutorial')) score += 20;\n  if (text.includes('diseño')) score += 15;\n  if (text.includes('branding')) score += 15;\n  if (post.imagen_url) score += 25;\n\n  return score;\n}\n\nfunction getFiltroContenido(data, j) {\n  const raw =\n    data.filtro_contenido ||\n    j.filtro_contenido ||\n    data.palabras_clave ||\n    j.palabras_clave ||\n    '';\n\n  return String(raw)\n    .split(',')\n    .map(x => x.trim().toLowerCase())\n    .filter(Boolean);\n}\n\nfunction hasPromptSignal(text = '') {\n  const t = String(text || '').toLowerCase();\n\n  return (\n    t.includes('prompt') ||\n    t.includes('chatgpt') ||\n    t.includes('sube tu imagen') ||\n    t.includes('upload your image') ||\n    t.includes('abrir chatgpt') ||\n    t.includes('open chatgpt') ||\n    t.includes('midjourney') ||\n    t.includes('stable diffusion') ||\n    t.includes('dall-e') ||\n    t.includes('retrato') ||\n    t.includes('portrait') ||\n    t.includes('render octane') ||\n    t.includes('image prompt') ||\n    t.includes('ai image') ||\n    t.includes('generative ai')\n  );\n}\n\nfunction matchesUserFilter(text = '', filtros = []) {\n  if (!filtros.length) return true;\n\n  const t = String(text || '').toLowerCase();\n\n  return filtros.some(f => t.includes(f));\n}\n\nconst out = [];\n\nfor (const item of items) {\n  const j = item.json || {};\n\n  const data =\n    j.data ||\n    j.body?.data ||\n    j.response?.data ||\n    j;\n\n  let posts = Array.isArray(data.posts) ? data.posts : [];\n  const filtros = getFiltroContenido(data, j);\n\n  posts = posts\n    .map(post => ({\n      ...post,\n      texto_limpio: cleanFinalText(post.texto_limpio || ''),\n      post_url: cleanUrl(post.post_url || data.url || j.url || ''),\n    }))\n\n    // Quita login, CSS y basura\n    .filter(post => !isBadPostText(post.texto_limpio))\n\n    // Debe tener imagen real o texto suficiente\n    .filter(post => post.imagen_url || post.texto_limpio.length > 120)\n\n    // Filtro de relevancia\n    .filter(post => {\n      if (!SOLO_POSTS_RELEVANTES) return true;\n\n      const texto = post.texto_limpio || '';\n      const coincideFiltro = matchesUserFilter(texto, filtros);\n      const tienePrompt = hasPromptSignal(texto);\n\n      if (tienePrompt) return true;\n      if (post.imagen_url && coincideFiltro) return true;\n\n      return false;\n    })\n\n    .sort((a, b) => scorePost(b) - scorePost(a));\n\n  if (!posts.length) {\n    out.push({\n      json: {\n        ...j,\n        nombre: data.nombre || j.nombre || 'Facebook',\n        cuenta: data.nombre || j.nombre || 'Facebook',\n        url: data.url || j.url || '',\n        pagina_url: data.url || j.url || '',\n        scrape_ok: false,\n        post_nuevo: false,\n        es_nuevo: false,\n        estado: 'SIN_POSTS_UTILES',\n        motivo: 'No se encontraron posts que coincidan con prompts/IA o filtros de contenido',\n        debug_candidates_count: data.debug_candidates_count || 0,\n        debug_body_text: data.debug_body_text || data.page_text_sample || '',\n      },\n    });\n    continue;\n  }\n\n  const unique = new Map();\n\n  /*\n   * AQUÍ SE LIMITA CUÁNTOS POSTS SE CONVIERTEN EN ITEMS\n   * Cada item que salga de aquí podrá generar 1 PDF.\n   * Cambia MAX_POSTS_A_PROCESAR arriba del todo.\n   */\n  for (const post of posts.slice(0, MAX_POSTS_A_PROCESAR)) {\n    const texto = String(post.texto_limpio || '').trim();\n    const imagen = String(post.imagen_url || '').trim();\n    const postUrl = cleanUrl(post.post_url || data.url || j.url || '');\n\n    /*\n     * IMPORTANTE:\n     * Sacamos un ID estable del post/reel/foto.\n     * Así no se repite aunque Facebook añada parámetros nuevos a la URL.\n     */\n    const postId = getStablePostId(postUrl);\n\n    /*\n     * IMPORTANTE:\n     * El hash depende del ID estable, no del texto ni de likes/comentarios.\n     * Así el mismo post no se vuelve a procesar si cambian reacciones o comentarios.\n     */\n    const postHash = hash(postId);\n\n    if (!postId || !postHash) continue;\n\n    if (unique.has(postHash)) continue;\n\n    unique.set(postHash, {\n      cuenta: data.nombre || j.nombre || 'Facebook',\n      nombre: data.nombre || j.nombre || 'Facebook',\n\n      // URL de la página/cuenta origen\n      url: data.url || j.url || '',\n      pagina_url: data.url || j.url || '',\n\n      // Datos del post\n      post_url: postUrl,\n      post_hash: postHash,\n      post_id: postId,\n\n      fecha_detectado: new Date().toISOString().slice(0, 10),\n      texto_limpio: texto,\n      imagen_url: imagen,\n\n      palabras_clave: data.palabras_clave || j.palabras_clave || '',\n      categoria: data.palabras_clave || j.palabras_clave || '',\n\n      scrape_ok: true,\n      estado: 'OK',\n      motivo: 'Post visible extraído desde DOM con sesión',\n\n      debug_score: scorePost(post),\n      debug_original_post_url: post.post_url || '',\n      debug_stable_post_id: postId,\n    });\n  }\n\n  for (const post of unique.values()) {\n    out.push({ json: post });\n  }\n}\n\nreturn out;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        768,
-        -688
+        992,
+        -784
       ],
       "id": "10dd8d2c-dce1-443f-aa8a-e017a3f92a4a",
       "name": "Extraer posts Facebook"
@@ -147,8 +157,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        1216,
-        -688
+        1440,
+        -784
       ],
       "id": "d6eaf59d-dae9-4f86-90d6-5af84f8f36cc",
       "name": "IF - Post nuevo OK"
@@ -160,8 +170,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1440,
-        -784
+        1664,
+        -880
       ],
       "id": "9a5aa067-5a0f-42e2-9edb-db20a262de8d",
       "name": "Preparar prompt IA"
@@ -186,8 +196,8 @@
       "type": "@n8n/n8n-nodes-langchain.ollama",
       "typeVersion": 1,
       "position": [
-        1664,
-        -784
+        1888,
+        -880
       ],
       "id": "6dd08d04-f906-4633-96a5-c32fe3e4408d",
       "name": "Message a model",
@@ -205,8 +215,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2016,
-        -784
+        2240,
+        -880
       ],
       "id": "66c4fcdb-3415-48b1-9856-6e6f61b701cc",
       "name": "Preparar fila Resultado"
@@ -218,8 +228,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3584,
-        -784
+        4032,
+        -880
       ],
       "id": "12f5e922-8e24-4d3b-b4d4-fe26216439a5",
       "name": "Preparar actualización Cuenta"
@@ -375,8 +385,8 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        3808,
-        -784
+        4256,
+        -880
       ],
       "id": "c2f7efc4-7d39-4225-a223-3ae1d86b615f",
       "name": "Update row in Cuentas",
@@ -394,8 +404,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1440,
-        -592
+        1664,
+        -688
       ],
       "id": "7c9c235b-3be2-4c9c-a996-57cc460f59d7",
       "name": "Preparar actualización fallo"
@@ -551,8 +561,8 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        1728,
-        -592
+        1952,
+        -688
       ],
       "id": "8b5b12b3-11c8-46d7-8573-1ce117992950",
       "name": "Update fallo en Cuentas",
@@ -676,8 +686,8 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        2240,
-        -784
+        2464,
+        -880
       ],
       "id": "a86238fe-40be-4411-9304-3f38ea331ae9",
       "name": "Append row in Resultados",
@@ -707,8 +717,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        2688,
-        -784
+        2912,
+        -880
       ],
       "id": "12992d42-e7aa-4247-b7c4-e06c5785f2d9",
       "name": "Crear PDF Browserless"
@@ -727,8 +737,8 @@
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
       "position": [
-        3136,
-        -784
+        3360,
+        -880
       ],
       "id": "aea15e44-54d8-4401-b762-cb3943e1c951",
       "name": "Send an Email",
@@ -747,8 +757,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2912,
-        -784
+        3136,
+        -880
       ],
       "id": "b86dd886-979d-433a-98b0-cd566ad2814a",
       "name": "Renombrar PDF"
@@ -756,13 +766,13 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "\nconst base = $('Preparar fila Resultado').item.json;\nconst j = { ...base, ...$json };\n\nfunction esc(v) {\n  return String(v ?? '')\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;');\n}\n\nconst cuenta = j.cuenta || 'Sin cuenta';\nconst fecha = j.fecha || new Date().toISOString().slice(0, 10);\n\nconst imagenHtml = j.imagen_url\n  ? `<div class=\"imageBox\"><img src=\"${esc(j.imagen_url)}\" /></div><p class=\"imgurl\">Imagen: ${esc(j.imagen_url)}</p>`\n  : `<div class=\"noImage\">No se pudo extraer imagen del post.</div>`;\n\nconst html = `\n<!doctype html>\n<html>\n<head>\n  <meta charset=\"utf-8\">\n  <style>\n    body { font-family: Arial, sans-serif; margin: 34px; color: #222; line-height: 1.45; }\n    h1 { font-size: 26px; margin-bottom: 6px; }\n    h2 { font-size: 18px; margin-top: 26px; border-bottom: 1px solid #ddd; padding-bottom: 6px; }\n    .meta { color: #666; font-size: 13px; margin-bottom: 22px; }\n    .imageBox { text-align: center; margin: 18px 0 12px 0; page-break-inside: avoid; }\n    .imageBox img { max-width: 100%; max-height: 720px; border-radius: 10px; object-fit: contain; }\n    .imgurl { font-size: 10px; color: #777; overflow-wrap: anywhere; }\n    .box { background: #f6f6f6; padding: 14px; border-radius: 8px; margin-bottom: 18px; white-space: pre-wrap; font-size: 14px; }\n    .noImage { background: #fff4e5; padding: 12px; border-radius: 8px; color: #8a4b00; margin-bottom: 18px; }\n    .small { font-size: 12px; color: #777; margin-top: 30px; }\n  </style>\n</head>\n<body>\n  <h1>${esc(cuenta)}</h1>\n  <div class=\"meta\">\n    Fecha: ${esc(fecha)}<br>\n    Categoría: ${esc(j.categoria)}<br>\n    Post: ${esc(j.post_url)}<br>\n    Página: ${esc(j.cuenta_url || '')}\n  </div>\n\n  <h2>Imagen del post</h2>\n  ${imagenHtml}\n\n  <h2>Texto del post</h2>\n  <div class=\"box\">${esc(j.texto)}</div>\n\n  <h2>Análisis / Prompts IA</h2>\n  <div class=\"box\">${esc(j.prompt)}</div>\n\n  <p class=\"small\">PDF generado automáticamente desde n8n.</p>\n</body>\n</html>\n`;\n\nconst filenameSafe = cuenta.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '');\nconst hashPart = String(j.post_hash || '').slice(0, 8);\n\nreturn {\n  json: {\n    ...j,\n    html,\n    pdf_filename: `${filenameSafe || 'documento'}_${fecha}_${hashPart}.pdf`,\n  },\n};\n"
+        "jsCode": "const j = $json;\n\nfunction esc(v) {\n  return String(v ?? '')\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;');\n}\n\nfunction formatPostText(raw = '') {\n  let t = String(raw || '').trim();\n\n  // Limpieza básica de ruido de Facebook\n  t = t\n    .replace(/\\bLike\\b/gi, '')\n    .replace(/\\bComment\\b/gi, '')\n    .replace(/\\bShare\\b/gi, '')\n    .replace(/\\bSend\\b/gi, '')\n    .replace(/\\bSee more\\b/gi, '')\n    .replace(/\\bVer más\\b/gi, '')\n    .replace(/\\bMostrar más\\b/gi, '')\n    .replace(/\\s+/g, ' ')\n    .trim();\n\n  // Saltos antes de pasos tipo \"1. Open ChatGPT 2. Upload...\"\n  t = t.replace(/\\s+(\\d+\\.)\\s+/g, '\\n$1 ');\n\n  // Saltos antes de palabras clave\n  t = t\n    .replace(/\\s+(Prompt\\s*:?\\s*)/gi, '\\n\\n$1')\n    .replace(/\\s+(Negative prompt\\s*:?\\s*)/gi, '\\n\\n$1')\n    .replace(/\\s+(Steps\\s*:?\\s*)/gi, '\\n\\n$1')\n    .replace(/\\s+(Settings\\s*:?\\s*)/gi, '\\n\\n$1')\n    .replace(/\\s+(Seed\\s*:?\\s*)/gi, '\\n\\n$1')\n    .replace(/\\s+(Model\\s*:?\\s*)/gi, '\\n\\n$1');\n\n  // Si hay comillas largas, intenta separarlas\n  t = t.replace(/[\"“]\\s*([^\"”]{120,})\\s*[\"”]/g, '\\n\\n\"$1\"\\n');\n\n  // Evitar demasiados saltos\n  t = t.replace(/\\n{3,}/g, '\\n\\n').trim();\n\n  const lines = t.split('\\n').map(x => x.trim()).filter(Boolean);\n\n  let html = '';\n  let inPromptBlock = false;\n\n  for (const line of lines) {\n    const isStep = /^\\d+\\./.test(line);\n    const isPromptTitle = /^prompt\\s*:?\\s*$/i.test(line) || /^prompt\\s*:/i.test(line);\n    const isNegativeTitle = /^negative prompt\\s*:/i.test(line);\n    const isQuotedLong = /^[\"“].{80,}/.test(line);\n\n    if (isStep) {\n      if (inPromptBlock) {\n        html += `</div>`;\n        inPromptBlock = false;\n      }\n\n      html += `<div class=\"step\">${esc(line)}</div>`;\n      continue;\n    }\n\n    if (isPromptTitle || isNegativeTitle) {\n      if (inPromptBlock) {\n        html += `</div>`;\n      }\n\n      const parts = line.split(/:\\s*/);\n      const title = parts[0] || 'Prompt';\n      const rest = parts.slice(1).join(': ');\n\n      html += `<div class=\"promptTitle\">${esc(title)}</div>`;\n      html += `<div class=\"promptBlock\">`;\n      inPromptBlock = true;\n\n      if (rest) {\n        html += `<p>${esc(rest)}</p>`;\n      }\n\n      continue;\n    }\n\n    if (isQuotedLong) {\n      if (!inPromptBlock) {\n        html += `<div class=\"promptBlock\">`;\n        inPromptBlock = true;\n      }\n\n      html += `<p>${esc(line)}</p>`;\n      continue;\n    }\n\n    if (inPromptBlock) {\n      html += `<p>${esc(line)}</p>`;\n    } else {\n      html += `<p>${esc(line)}</p>`;\n    }\n  }\n\n  if (inPromptBlock) {\n    html += `</div>`;\n  }\n\n  return html || '<p>No se pudo extraer texto del post.</p>';\n}\n\nconst cuenta = j.cuenta || j.nombre || 'Facebook';\nconst fecha = j.fecha || j.fecha_detectado || new Date().toISOString().slice(0, 10);\nconst categoria = j.categoria || j.palabras_clave || '';\nconst postUrl = j.post_url || '';\nconst paginaUrl = j.pagina_url || j.url || '';\nconst imagenUrl = j.imagen_url || '';\nconst textoPost = j.texto || j.texto_limpio || '';\n\nconst imagenHtml = imagenUrl\n  ? `\n    <div class=\"imageBox\">\n      <img src=\"${esc(imagenUrl)}\" />\n    </div>\n    <div class=\"imageUrl\">\n      <strong>Imagen:</strong> ${esc(imagenUrl)}\n    </div>\n  `\n  : `<div class=\"noImage\">No se pudo extraer imagen del post.</div>`;\n\nconst html = `\n<!doctype html>\n<html>\n<head>\n  <meta charset=\"utf-8\">\n  <style>\n    body {\n      font-family: Arial, sans-serif;\n      margin: 34px;\n      color: #222;\n      line-height: 1.5;\n      font-size: 14px;\n    }\n\n    h1 {\n      font-size: 26px;\n      margin-bottom: 6px;\n    }\n\n    h2 {\n      font-size: 18px;\n      margin-top: 28px;\n      border-bottom: 1px solid #ddd;\n      padding-bottom: 6px;\n    }\n\n    .meta {\n      color: #555;\n      font-size: 13px;\n      margin-bottom: 22px;\n      word-break: break-word;\n    }\n\n    .imageBox {\n      text-align: center;\n      margin: 18px 0 18px 0;\n      page-break-inside: avoid;\n    }\n\n    .imageBox img {\n      max-width: 100%;\n      max-height: 760px;\n      border-radius: 10px;\n      object-fit: contain;\n    }\n\n    .imageUrl {\n      font-size: 10px;\n      color: #666;\n      word-break: break-all;\n      margin-bottom: 18px;\n    }\n\n    .textBox {\n      background: #f7f7f7;\n      padding: 18px;\n      border-radius: 10px;\n      margin-bottom: 18px;\n      font-size: 15px;\n      line-height: 1.65;\n    }\n\n    .textBox p {\n      margin: 0 0 12px 0;\n    }\n\n    .step {\n      background: #ffffff;\n      border-left: 5px solid #444;\n      padding: 10px 12px;\n      margin: 10px 0;\n      border-radius: 6px;\n      font-weight: bold;\n      page-break-inside: avoid;\n    }\n\n    .promptTitle {\n      margin-top: 18px;\n      font-size: 17px;\n      font-weight: bold;\n      color: #111;\n    }\n\n    .promptBlock {\n      background: #ffffff;\n      border: 1px solid #ddd;\n      border-left: 5px solid #111;\n      padding: 14px 16px;\n      border-radius: 8px;\n      margin: 10px 0 16px 0;\n      font-family: Georgia, \"Times New Roman\", serif;\n      font-size: 15px;\n      line-height: 1.7;\n      white-space: pre-wrap;\n      page-break-inside: avoid;\n    }\n\n    .promptBlock p {\n      margin: 0 0 12px 0;\n    }\n\n    .noImage {\n      background: #fff4e5;\n      padding: 12px;\n      border-radius: 8px;\n      color: #8a4b00;\n      margin-bottom: 18px;\n    }\n\n    .small {\n      font-size: 12px;\n      color: #777;\n      margin-top: 30px;\n    }\n  </style>\n</head>\n<body>\n  <h1>${esc(cuenta)}</h1>\n\n  <div class=\"meta\">\n    <strong>Fecha:</strong> ${esc(fecha)}<br>\n    <strong>Categoría:</strong> ${esc(categoria)}<br>\n    <strong>Post:</strong> ${esc(postUrl)}<br>\n    <strong>Página:</strong> ${esc(paginaUrl)}\n  </div>\n\n  <h2>Imagen del post</h2>\n  ${imagenHtml}\n\n  <h2>Texto del post</h2>\n  <div class=\"textBox\">\n    ${formatPostText(textoPost)}\n  </div>\n\n  <p class=\"small\">PDF generado automáticamente desde n8n.</p>\n</body>\n</html>\n`;\n\nconst filenameSafe = cuenta\n  .replace(/[^a-z0-9]+/gi, '_')\n  .replace(/^_+|_+$/g, '');\n\nconst hash = String(j.post_hash || Date.now()).slice(0, 8);\n\nreturn {\n  json: {\n    ...j,\n    html,\n    pdf_filename: `${filenameSafe || 'Facebook'}_${fecha}_${hash}.pdf`,\n  },\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2464,
-        -784
+        2688,
+        -880
       ],
       "id": "39e5c617-b926-4566-8e98-ef7da2043015",
       "name": "Preparar HTML PDF"
@@ -770,13 +780,13 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const j = $json;\n\nfunction normalizeFacebookUrl(url) {\n  let u = String(url || '').trim();\n  if (!u) return '';\n\n  u = u.replace(/\\/$/, '');\n\n  if (/facebook\\.com/i.test(u)) {\n    try {\n      const parsed = new URL(u);\n      let path = parsed.pathname || '/';\n\n      path = path.replace(/^\\/+/, '').replace(/\\/+$/, '');\n\n      const isPost =\n        /story\\.php|posts|photos|videos|reel|permalink|photo\\.php/i.test(path) ||\n        parsed.searchParams.has('fbid');\n\n      if (!isPost) {\n        return `https://mbasic.facebook.com/${path}?v=timeline`;\n      }\n\n      return `https://mbasic.facebook.com/${path}${parsed.search || ''}`;\n    } catch (e) {\n      return u\n        .replace(/^https?:\\/\\/(www\\.|m\\.)?facebook\\.com/i, 'https://mbasic.facebook.com')\n        .replace(/^https?:\\/\\/facebook\\.com/i, 'https://mbasic.facebook.com');\n    }\n  }\n\n  return u;\n}\n\nreturn {\n  json: {\n    ...j,\n    scrape_url: normalizeFacebookUrl(j.url),\n    debug_original_url: j.url,\n    debug_scrape_url: normalizeFacebookUrl(j.url),\n  },\n};"
+        "jsCode": "const j = $json;\n\nfunction normalizeFacebookUrl(url) {\n  let u = String(url || '').trim();\n  if (!u) return '';\n\n  u = u.replace(/\\/$/, '');\n\n  if (/facebook\\.com/i.test(u)) {\n    try {\n      const parsed = new URL(u);\n      let path = parsed.pathname || '/';\n      path = path.replace(/^\\/+/, '').replace(/\\/+$/, '');\n\n      const isPost =\n        /story\\.php|posts|photos|videos|reel|permalink|photo\\.php/i.test(path) ||\n        parsed.searchParams.has('fbid');\n\n      // Para páginas generales usamos m.facebook.com con sesión/cookies\n      if (!isPost) {\n        return `https://m.facebook.com/${path}`;\n      }\n\n      return `https://m.facebook.com/${path}${parsed.search || ''}`;\n    } catch (e) {\n      return u.replace(\n        /^https?:\\/\\/(www\\.|m\\.|mbasic\\.)?facebook\\.com/i,\n        'https://m.facebook.com'\n      );\n    }\n  }\n\n  return u;\n}\n\nconst scrapeUrl = normalizeFacebookUrl(j.url);\n\nreturn {\n  json: {\n    ...j,\n    scrape_url: scrapeUrl,\n    debug_original_url: j.url,\n    debug_scrape_url: scrapeUrl,\n  },\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         320,
-        -688
+        -784
       ],
       "id": "957955b1-7428-4809-b159-bb446ae5392f",
       "name": "Preparar URL Scrape"
@@ -803,7 +813,7 @@
       "typeVersion": 4.7,
       "position": [
         -352,
-        -688
+        -784
       ],
       "id": "912bbe40-6ec5-4d28-8800-9dc182b3e120",
       "name": "Get Posts existentes",
@@ -817,13 +827,13 @@
     },
     {
       "parameters": {
-        "jsCode": "const postsDetectados = $input.all();\nconst postsExistentes = $('Get Posts existentes').all();\n\nconst hashesExistentes = new Set();\n\nfor (const item of postsExistentes) {\n  const h = String(item.json.post_hash || '').trim();\n  if (h) hashesExistentes.add(h);\n}\n\nreturn postsDetectados.map(item => {\n  const j = item.json;\n  const postHash = String(j.post_hash || '').trim();\n\n  const postNuevo = Boolean(\n    j.scrape_ok === true &&\n    postHash &&\n    !hashesExistentes.has(postHash)\n  );\n\n  return {\n    json: {\n      ...j,\n      post_nuevo: postNuevo,\n      motivo_post_nuevo: postNuevo\n        ? 'Post nuevo detectado'\n        : 'Post ya existente o sin hash válido',\n    },\n  };\n});"
+        "jsCode": "/*\n * Este nodo compara los posts detectados con la hoja Posts.\n * Si el post_hash ya existe, no se vuelve a generar PDF.\n * Si no existe, post_nuevo = true y sigue hacia IA/PDF/email.\n */\n\nconst postsDetectados = $input.all();\nconst postsExistentes = $('Get Posts existentes').all();\n\nconst hashesExistentes = new Set();\n\nfor (const item of postsExistentes) {\n  const h = String(item.json.post_hash || '').trim();\n  if (h) hashesExistentes.add(h);\n}\n\nreturn postsDetectados.map(item => {\n  const j = item.json;\n  const postHash = String(j.post_hash || '').trim();\n\n  const postNuevo = Boolean(\n    j.scrape_ok === true &&\n    postHash &&\n    !hashesExistentes.has(postHash)\n  );\n\n  return {\n    json: {\n      ...j,\n      post_nuevo: postNuevo,\n      motivo_post_nuevo: postNuevo\n        ? 'Post nuevo detectado'\n        : 'Post ya existente o sin hash válido',\n    },\n  };\n});"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        992,
-        -688
+        1216,
+        -784
       ],
       "id": "0c8d18f3-edaf-4f5e-b382-bd140b323fd7",
       "name": "Marcar posts nuevos"
@@ -851,10 +861,11 @@
             "cuenta": "={{ $json.cuenta }}",
             "post_url": "={{ $json.post_url }}",
             "post_hash": "={{ $json.post_hash }}",
-            "fecha_detectado": "={{ $json.fecha }}",
+            "fecha_detectado": "={{ $json.fecha_detectado }}",
             "texto": "={{ $json.texto }}",
             "imagen_url": "={{ $json.imagen_url }}",
-            "procesado": "SI"
+            "procesado": "={{ $json.procesado }}",
+            "post_id": "={{ $json.post_id }}"
           },
           "matchingColumns": [],
           "schema": [
@@ -884,6 +895,16 @@
               "display": true,
               "type": "string",
               "canBeUsedToMatch": true
+            },
+            {
+              "id": "post_id",
+              "displayName": "post_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
             },
             {
               "id": "fecha_detectado",
@@ -930,8 +951,8 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        3360,
-        -784
+        3808,
+        -880
       ],
       "id": "8f3e99dd-a075-46a9-ae14-0f1e34528ae8",
       "name": "Guardar post en Posts",
@@ -941,6 +962,119 @@
           "name": "Google Service Account account"
         }
       }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "358c54f1-8b14-43bb-8ede-f46aaf04b7e1",
+              "name": "fb_c_user",
+              "value": "100000026355367",
+              "type": "string"
+            },
+            {
+              "id": "f91c8e7a-6dd2-4f3f-bfff-17a49fd7e552",
+              "name": "fb_xs",
+              "value": "40%3A2rbAV40_q9KO2w%3A2%3A1778682733%3A-1%3A-1%3A%3AAcyLonYPKc_7XMkfqB0H9VIE8jHOUYTkOIWztlEaew",
+              "type": "string"
+            },
+            {
+              "id": "d51539d2-2ab8-4188-8bdb-ec91f29b0b93",
+              "name": "fb_datr",
+              "value": "eEkDanhzq5fx823bovtxkd0X",
+              "type": "string"
+            },
+            {
+              "id": "b1b45acd-5b41-4939-9fc3-0b09660d6ec0",
+              "name": "fb_fr",
+              "value": "0jcRuJA8R7eu3jeux.AWcjRQ3TxKF6XfkDk-iYjHUAmja3k5wURQKfzjBW_KKHSMbYSJY.BqBN2l..AAA.0.0.BqBd2a.AWeuC7LznoM3uUnuAxpojpuPNtQ",
+              "type": "string"
+            },
+            {
+              "id": "f2dd8798-870f-4975-9145-6e2dfbbabb39",
+              "name": "fb_sb",
+              "value": "eEkDagJ_M9KB1A-SMYWUmZOP",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        544,
+        -784
+      ],
+      "id": "605c25b7-63e2-4d96-b4c2-da8dcb9e18c5",
+      "name": "Añadir cookies FB"
+    },
+    {
+      "parameters": {
+        "content": "Comentarios claros para que luego puedas cambiar el número de posts sin acordarte de dónde estaba. Si quieres que baje TODO, incluso tutoriales sin prompt: - En Extraer posts Facebook, cambia: const SOLO_POSTS_RELEVANTES = true; por: const SOLO_POSTS_RELEVANTES = false;\n\nCon false, generará PDFs para cualquier post visible útil con imagen/texto, no solo prompts.",
+        "height": 304,
+        "width": 688
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        696,
+        -928
+      ],
+      "typeVersion": 1,
+      "id": "33104657-0f73-49a6-8dd6-ba266ac29789",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 5
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -576,
+        -880
+      ],
+      "id": "ec688287-7276-46b4-a414-a279126fe7d3",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "content": "Para regenerarlas: cierra sesión en Facebook, vuelve a entrar, copia las cookies nuevas y sustitúyelas en Añadir cookies FB.\n\nTu PC/Firefox logueado en Facebook\n→ copias cookies c_user, xs, datr, fr, sb\n→ las pegas en n8n\n→ Browserless las usa como si fuera esa sesión",
+        "height": 528,
+        "width": 166,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        509,
+        -1152
+      ],
+      "typeVersion": 1,
+      "id": "e8bdda07-409d-4a44-83f1-2e43b4014033",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const crypto = require('crypto');\n\n/*\n * PREPARAR FILA POST\n *\n * Este nodo guarda en la pestaña Posts los datos necesarios\n * para no repetir el mismo post en futuras ejecuciones.\n *\n * IMPORTANTE:\n * Si post_hash o post_id vienen vacíos, los calculamos aquí\n * usando la URL del post.\n */\n\nconst meta = $('Preparar HTML PDF').item.json;\n\nfunction hash(value = '') {\n  return crypto\n    .createHash('sha256')\n    .update(String(value))\n    .digest('hex')\n    .slice(0, 24);\n}\n\nfunction cleanUrl(url = '') {\n  url = String(url || '').trim();\n\n  try {\n    const u = new URL(url);\n\n    // Quitamos parámetros variables de Facebook\n    u.searchParams.delete('__cft__[0]');\n    u.searchParams.delete('__tn__');\n    u.searchParams.delete('mibextid');\n    u.searchParams.delete('ref');\n    u.searchParams.delete('refid');\n    u.searchParams.delete('locale');\n\n    return u.origin + u.pathname + (u.search ? u.search : '');\n  } catch {\n    return url.split('?')[0];\n  }\n}\n\nfunction getStablePostId(url = '') {\n  url = String(url || '');\n\n  // Reels: /reel/967376516157967/\n  let m = url.match(/\\/reel\\/(\\d+)/i);\n  if (m) return `reel_${m[1]}`;\n\n  // Fotos: fbid=106748115604529\n  m = url.match(/[?&]fbid=(\\d+)/i);\n  if (m) return `fbid_${m[1]}`;\n\n  // Posts numéricos: /posts/123456789\n  m = url.match(/\\/posts\\/(\\d+)/i);\n  if (m) return `post_${m[1]}`;\n\n  // Posts pfbid: /posts/pfbid0Y...\n  m = url.match(/\\/posts\\/([^/?#]+)/i);\n  if (m) return `post_${m[1]}`;\n\n  // Stories\n  m = url.match(/[?&]story_fbid=(\\d+)/i);\n  if (m) return `story_${m[1]}`;\n\n  // Fallback estable\n  return cleanUrl(url);\n}\n\nconst postUrl = cleanUrl(meta.post_url || '');\nconst postId = String(meta.post_id || getStablePostId(postUrl)).trim();\nconst postHash = String(meta.post_hash || hash(postId)).trim();\n\nreturn {\n  json: {\n    cuenta: meta.cuenta || meta.nombre || 'Facebook',\n\n    post_url: postUrl,\n    post_hash: postHash,\n    post_id: postId,\n\n    fecha_detectado:\n      meta.fecha_detectado ||\n      meta.fecha ||\n      new Date().toISOString().slice(0, 10),\n\n    texto: String(meta.texto_limpio || meta.texto || '').trim(),\n\n    imagen_url: String(meta.imagen_url || '').trim(),\n\n    procesado: 'SI',\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3584,
+        -880
+      ],
+      "id": "483fd239-2da0-40c6-b426-30200284fdf2",
+      "name": "Preparar fila Post"
     }
   ],
   "connections": {
@@ -992,7 +1126,7 @@
       "main": [
         [
           {
-            "node": "Browserless Scraper",
+            "node": "Añadir cookies FB",
             "type": "main",
             "index": 0
           }
@@ -1131,7 +1265,7 @@
       "main": [
         [
           {
-            "node": "Guardar post en Posts",
+            "node": "Preparar fila Post",
             "type": "main",
             "index": 0
           }
@@ -1170,19 +1304,56 @@
           }
         ]
       ]
+    },
+    "Añadir cookies FB": {
+      "main": [
+        [
+          {
+            "node": "Browserless Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Posts existentes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar fila Post": {
+      "main": [
+        [
+          {
+            "node": "Guardar post en Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "staticData": null,
+  "staticData": {
+    "node:Schedule Trigger": {
+      "recurrenceRules": []
+    }
+  },
   "meta": null,
   "pinData": {},
-  "versionId": "d422a0f3-098c-448f-91b3-d989d5636eff",
-  "activeVersionId": null,
-  "versionCounter": 66,
-  "triggerCount": 0,
+  "versionId": "4c264bbe-c564-4d9d-bc3e-4598154e8d07",
+  "activeVersionId": "4c264bbe-c564-4d9d-bc3e-4598154e8d07",
+  "versionCounter": 224,
+  "triggerCount": 1,
   "tags": [],
   "shared": [
     {
@@ -1204,7 +1375,7 @@
     }
   ],
   "versionMetadata": {
-    "name": null,
-    "description": null
+    "name": "Version 4c264bbe",
+    "description": ""
   }
 }
