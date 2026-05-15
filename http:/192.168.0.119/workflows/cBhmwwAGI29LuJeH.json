@@ -1346,7 +1346,7 @@
   "staticData": {
     "node:Schedule Trigger": {
       "recurrenceRules": [
-        0
+        10
       ]
     }
   },
@@ -1354,7 +1354,7 @@
   "pinData": {},
   "versionId": "4c264bbe-c564-4d9d-bc3e-4598154e8d07",
   "activeVersionId": "4c264bbe-c564-4d9d-bc3e-4598154e8d07",
-  "versionCounter": 225,
+  "versionCounter": 227,
   "triggerCount": 1,
   "tags": [],
   "shared": [
