@@ -4,7 +4,7 @@
   "id": "cBhmwwAGI29LuJeH",
   "name": "Facebook IA a Google Sheets - TODOS LOS POSTS v2",
   "description": null,
-  "active": true,
+  "active": false,
   "isArchived": false,
   "nodes": [
     {
@@ -1353,8 +1353,8 @@
   "meta": null,
   "pinData": {},
   "versionId": "95170505-0b8d-4d75-ae48-80bb8f7174f1",
-  "activeVersionId": "95170505-0b8d-4d75-ae48-80bb8f7174f1",
-  "versionCounter": 282,
+  "activeVersionId": null,
+  "versionCounter": 283,
   "triggerCount": 1,
   "tags": [],
   "shared": [
