@@ -1,11 +1,11 @@
 {
-  "updatedAt": "2026-05-21T15:06:34.287Z",
+  "updatedAt": "2026-05-21T16:03:25.686Z",
   "createdAt": "2026-05-21T15:04:20.612Z",
   "id": "4vFFhB7QFlH3ij3D",
   "name": "Alertas PLACSP de 31a40",
   "description": null,
-  "active": true,
-  "isArchived": false,
+  "active": false,
+  "isArchived": true,
   "nodes": [
     {
       "parameters": {
@@ -544,9 +544,9 @@
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
-  "versionId": "4880f9ad-4e4c-491a-bae3-397b5eadebeb",
-  "activeVersionId": "4880f9ad-4e4c-491a-bae3-397b5eadebeb",
-  "versionCounter": 8,
+  "versionId": "aa02a7dd-571f-43de-9f29-b34abdb92e56",
+  "activeVersionId": null,
+  "versionCounter": 10,
   "triggerCount": 1,
   "tags": [],
   "shared": [
@@ -569,7 +569,7 @@
     }
   ],
   "versionMetadata": {
-    "name": "Version 4880f9ad",
-    "description": ""
+    "name": null,
+    "description": null
   }
 }

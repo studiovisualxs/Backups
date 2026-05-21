@@ -1,10 +1,10 @@
 {
-  "updatedAt": "2026-05-21T15:02:26.891Z",
+  "updatedAt": "2026-05-21T16:32:26.235Z",
   "createdAt": "2026-05-09T10:32:21.122Z",
   "id": "xwmcCxJNeoC7vxM4",
-  "name": "Alertas PLACSP de 01a10 data",
+  "name": "Alertas PLACSP Mejorado",
   "description": null,
-  "active": true,
+  "active": false,
   "isArchived": false,
   "nodes": [
     {
@@ -23,7 +23,7 @@
       "typeVersion": 1.2,
       "position": [
         0,
-        -160
+        64
       ]
     },
     {
@@ -34,7 +34,7 @@
       "typeVersion": 1,
       "position": [
         0,
-        32
+        256
       ]
     },
     {
@@ -58,7 +58,7 @@
       "typeVersion": 4.5,
       "position": [
         224,
-        -64
+        160
       ],
       "credentials": {
         "googleApi": {
@@ -77,7 +77,7 @@
       "typeVersion": 2,
       "position": [
         448,
-        -64
+        160
       ]
     },
     {
@@ -86,47 +86,24 @@
         "options": {
           "response": {
             "response": {
-              "responseFormat": "file"
+              "responseFormat": "text"
             }
-          }
+          },
+          "timeout": 300000
         }
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
         672,
-        -64
+        160
       ],
       "id": "6e1eebd2-6d64-4823-a76c-91a251c4a881",
-      "name": "HTTP Request"
-    },
-    {
-      "parameters": {
-        "outputPrefix": "data_"
-      },
-      "type": "n8n-nodes-base.compression",
-      "typeVersion": 1.1,
-      "position": [
-        896,
-        -64
-      ],
-      "id": "aff6ad57-1b89-4bcc-a9aa-63584954fca0",
-      "name": "Compression"
-    },
-    {
-      "parameters": {
-        "operation": "text",
-        "binaryPropertyName": "={{$json.binary_field}}",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.extractFromFile",
-      "typeVersion": 1.1,
-      "position": [
-        1344,
-        -64
-      ],
-      "id": "8a5c3620-2d8e-4b90-a1db-7db0fc600596",
-      "name": "Extract from File"
+      "name": "HTTP Request",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -135,8 +112,8 @@
       "type": "n8n-nodes-base.xml",
       "typeVersion": 1,
       "position": [
-        1568,
-        -64
+        896,
+        160
       ],
       "id": "0715d1e9-dea7-45ad-aab4-33965d7f39b4",
       "name": "XML"
@@ -148,8 +125,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1792,
-        -64
+        1120,
+        160
       ],
       "id": "4f912562-d85f-4908-8b10-139c912607ae",
       "name": "Filtrar licitaciones"
@@ -161,8 +138,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2464,
-        32
+        1792,
+        256
       ],
       "id": "fafa96ed-9fc2-4138-919c-6414d3c40939",
       "name": "Preparar email"
@@ -180,8 +157,8 @@
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
       "position": [
-        2688,
-        32
+        2016,
+        256
       ],
       "id": "d339387b-af2c-42ed-91aa-bba81d891ae2",
       "name": "Send an Email",
@@ -192,19 +169,6 @@
           "name": "SMTP account"
         }
       }
-    },
-    {
-      "parameters": {
-        "jsCode": "const item = $input.first();\nconst binaries = item.binary || {};\n\nreturn Object.keys(binaries)\n  .filter(key => key.startsWith('data'))\n  .slice(1, 10)\n  .map(key => ({\n    json: {\n      binary_field: key,\n    },\n    binary: {\n      [key]: binaries[key],\n    },\n  }));"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1120,
-        -64
-      ],
-      "id": "20e45794-6b3a-4f32-84b7-97666bea9221",
-      "name": "Preparar archivos XML"
     },
     {
       "parameters": {
@@ -228,8 +192,8 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        2016,
-        -64
+        1344,
+        160
       ],
       "id": "d3f019c5-7b7e-422c-9195-e2ed801313c4",
       "name": "Leer enviadas",
@@ -248,8 +212,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2240,
-        -64
+        1568,
+        160
       ],
       "id": "fd070682-693c-4bc4-b675-a7f62809fd5f",
       "name": "Quitar duplicados"
@@ -336,8 +300,8 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        2464,
-        -160
+        1792,
+        64
       ],
       "id": "96a6b075-79ba-47bd-bb0f-0f943e302ed8",
       "name": "Append row in sheet",
@@ -347,21 +311,6 @@
           "name": "Google Service Account account"
         }
       }
-    },
-    {
-      "parameters": {
-        "content": "Cuando veas que va bien, cambia a todos quitando .slice(1, 10).",
-        "height": 80,
-        "width": 256
-      },
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        1040,
-        -176
-      ],
-      "id": "0cddde8b-20d4-4987-89a3-f8ce66997d1f",
-      "name": "Sticky Note"
     }
   ],
   "connections": {
@@ -413,28 +362,6 @@
       "main": [
         [
           {
-            "node": "Compression",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Compression": {
-      "main": [
-        [
-          {
-            "node": "Preparar archivos XML",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Extract from File": {
-      "main": [
-        [
-          {
             "node": "XML",
             "type": "main",
             "index": 0
@@ -469,17 +396,6 @@
         [
           {
             "node": "Send an Email",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Preparar archivos XML": {
-      "main": [
-        [
-          {
-            "node": "Extract from File",
             "type": "main",
             "index": 0
           }
@@ -543,9 +459,9 @@
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
-  "versionId": "f4bd3319-8959-44d5-a95d-dcd4f8305f0b",
-  "activeVersionId": "f4bd3319-8959-44d5-a95d-dcd4f8305f0b",
-  "versionCounter": 162,
+  "versionId": "83f83845-edf2-4bb2-ba07-761108fd9fc7",
+  "activeVersionId": null,
+  "versionCounter": 194,
   "triggerCount": 1,
   "tags": [],
   "shared": [
@@ -568,7 +484,7 @@
     }
   ],
   "versionMetadata": {
-    "name": "Version f4bd3319",
-    "description": ""
+    "name": null,
+    "description": null
   }
 }
