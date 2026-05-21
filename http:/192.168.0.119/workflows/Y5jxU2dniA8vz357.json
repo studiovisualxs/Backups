@@ -1,8 +1,8 @@
 {
-  "updatedAt": "2026-05-14T06:45:00.087Z",
+  "updatedAt": "2026-05-21T15:05:30.674Z",
   "createdAt": "2026-05-11T09:30:08.411Z",
   "id": "Y5jxU2dniA8vz357",
-  "name": "Alertas PLACSP de 21a40 data",
+  "name": "Alertas PLACSP de 11a20 data",
   "description": null,
   "active": true,
   "isArchived": false,
@@ -196,7 +196,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.first();\nconst binaries = item.binary || {};\n\nreturn Object.keys(binaries)\n  .filter(key => key.startsWith('data'))\n  .slice(21, 40)\n  .map(key => ({\n    json: {\n      binary_field: key,\n    },\n    binary: {\n      [key]: binaries[key],\n    },\n  }));"
+        "jsCode": "const item = $input.first();\nconst binaries = item.binary || {};\n\nreturn Object.keys(binaries)\n  .filter(key => key.startsWith('data'))\n  .slice(11, 20)\n  .map(key => ({\n    json: {\n      binary_field: key,\n    },\n    binary: {\n      [key]: binaries[key],\n    },\n  }));"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -544,9 +544,9 @@
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
-  "versionId": "cdcc5e8a-d515-4729-9cdd-ee3a77629179",
-  "activeVersionId": "cdcc5e8a-d515-4729-9cdd-ee3a77629179",
-  "versionCounter": 35,
+  "versionId": "ac357233-6720-4067-b335-a3897d9f626f",
+  "activeVersionId": "fd63136a-0f56-4d05-aac3-915b3a95a46d",
+  "versionCounter": 44,
   "triggerCount": 1,
   "tags": [],
   "shared": [
@@ -569,7 +569,7 @@
     }
   ],
   "versionMetadata": {
-    "name": "Version cdcc5e8a",
-    "description": ""
+    "name": null,
+    "description": null
   }
 }

@@ -1,8 +1,8 @@
 {
-  "updatedAt": "2026-05-21T15:02:26.891Z",
-  "createdAt": "2026-05-09T10:32:21.122Z",
-  "id": "xwmcCxJNeoC7vxM4",
-  "name": "Alertas PLACSP de 01a10 data",
+  "updatedAt": "2026-05-21T15:06:34.287Z",
+  "createdAt": "2026-05-21T15:04:20.612Z",
+  "id": "4vFFhB7QFlH3ij3D",
+  "name": "Alertas PLACSP de 31a40",
   "description": null,
   "active": true,
   "isArchived": false,
@@ -12,12 +12,13 @@
         "rule": {
           "interval": [
             {
-              "triggerAtHour": "=  15"
+              "triggerAtHour": "=15\n",
+              "triggerAtMinute": 45
             }
           ]
         }
       },
-      "id": "11eadb49-7d50-491b-b5c5-b105673654b4",
+      "id": "ecea8944-60a1-4f76-a639-838b6df330f5",
       "name": "Cada día",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
@@ -28,7 +29,7 @@
     },
     {
       "parameters": {},
-      "id": "26b5ae3a-ebaa-4067-bef6-82ee7d0aafd6",
+      "id": "0670e164-93b8-4c35-bace-4ae090163a2a",
       "name": "Ejecutar manual",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
@@ -52,7 +53,7 @@
         },
         "options": {}
       },
-      "id": "dd73343b-3c75-4914-b604-7b462c095725",
+      "id": "a5267266-d551-4482-ac9f-6c99caaf7a53",
       "name": "Leer configuración",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
@@ -71,7 +72,7 @@
       "parameters": {
         "jsCode": "const rows = $input.all().map(i => i.json);\n\nconst config = {};\n\nfor (const row of rows) {\n  const key = String(row.campo || '').trim();\n  const value = row.valor ?? '';\n\n  if (key) config[key] = value;\n}\n\nfunction splitList(value) {\n  return String(value || '')\n    .split(',')\n    .map(v => v.trim())\n    .filter(Boolean);\n}\n\nconst now = new Date();\nconst yyyy = now.getFullYear();\nconst mm = String(now.getMonth() + 1).padStart(2, '0');\n\nconst feedUrlAuto = `https://contrataciondelsectorpublico.gob.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3_${yyyy}${mm}.zip`;\n\nreturn [{\n  json: {\n    feed_url: config.feed_url && String(config.feed_url).trim()\n      ? String(config.feed_url).trim()\n      : feedUrlAuto,\n\n    keywords: splitList(config.keywords),\n    exclude_keywords: splitList(config.exclude_keywords),\n    provincias: splitList(config.provincia),\n    cpvs: splitList(config.cpv),\n\n    importe_min: Number(config.importe_min || 0),\n    email_destino: String(config.email_destino || '').trim(),\n    max_resultados: Number(config.max_resultados || 25),\n    solo_abiertas: String(config.solo_abiertas || '').toLowerCase() === 'sí',\n    frecuencia: String(config.frecuencia || 'diaria').trim()\n  }\n}];"
       },
-      "id": "b1752069-f578-465c-aa0c-b346ae7399fe",
+      "id": "eb3e60f6-a1e9-4f09-be55-05f62fb64115",
       "name": "Normalizar configuración",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -97,7 +98,7 @@
         672,
         -64
       ],
-      "id": "6e1eebd2-6d64-4823-a76c-91a251c4a881",
+      "id": "a4a50885-eea3-4408-a193-dcc0c109b423",
       "name": "HTTP Request"
     },
     {
@@ -110,7 +111,7 @@
         896,
         -64
       ],
-      "id": "aff6ad57-1b89-4bcc-a9aa-63584954fca0",
+      "id": "21388099-93f7-4bd8-a858-4925633b429e",
       "name": "Compression"
     },
     {
@@ -125,7 +126,7 @@
         1344,
         -64
       ],
-      "id": "8a5c3620-2d8e-4b90-a1db-7db0fc600596",
+      "id": "c8488784-7b24-4cac-b0f1-072f1d40d133",
       "name": "Extract from File"
     },
     {
@@ -138,7 +139,7 @@
         1568,
         -64
       ],
-      "id": "0715d1e9-dea7-45ad-aab4-33965d7f39b4",
+      "id": "0b334eb2-81d7-498b-bc63-6f7a35a14238",
       "name": "XML"
     },
     {
@@ -151,7 +152,7 @@
         1792,
         -64
       ],
-      "id": "4f912562-d85f-4908-8b10-139c912607ae",
+      "id": "0ecdc82f-b885-4e3b-9392-699a60e84d53",
       "name": "Filtrar licitaciones"
     },
     {
@@ -164,7 +165,7 @@
         2464,
         32
       ],
-      "id": "fafa96ed-9fc2-4138-919c-6414d3c40939",
+      "id": "637340a6-af87-4b74-858e-ade26e03f379",
       "name": "Preparar email"
     },
     {
@@ -183,9 +184,9 @@
         2688,
         32
       ],
-      "id": "d339387b-af2c-42ed-91aa-bba81d891ae2",
+      "id": "d5a3f6b5-ee84-4f05-b230-7479476c9bf6",
       "name": "Send an Email",
-      "webhookId": "416d9d28-4741-4a5f-93b1-3bed201d5ffe",
+      "webhookId": "b90db6e7-0463-4e52-9c9a-e93bac0d232b",
       "credentials": {
         "smtp": {
           "id": "7s7pTTjulVSpVWUt",
@@ -195,7 +196,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.first();\nconst binaries = item.binary || {};\n\nreturn Object.keys(binaries)\n  .filter(key => key.startsWith('data'))\n  .slice(1, 10)\n  .map(key => ({\n    json: {\n      binary_field: key,\n    },\n    binary: {\n      [key]: binaries[key],\n    },\n  }));"
+        "jsCode": "const item = $input.first();\nconst binaries = item.binary || {};\n\nreturn Object.keys(binaries)\n  .filter(key => key.startsWith('data'))\n  .slice(31, 40)\n  .map(key => ({\n    json: {\n      binary_field: key,\n    },\n    binary: {\n      [key]: binaries[key],\n    },\n  }));"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -203,7 +204,7 @@
         1120,
         -64
       ],
-      "id": "20e45794-6b3a-4f32-84b7-97666bea9221",
+      "id": "3e0b159e-3f19-4b04-8e39-5b6f47757b9f",
       "name": "Preparar archivos XML"
     },
     {
@@ -231,7 +232,7 @@
         2016,
         -64
       ],
-      "id": "d3f019c5-7b7e-422c-9195-e2ed801313c4",
+      "id": "f0e35795-f0c3-489d-bbfa-18891b38fa0e",
       "name": "Leer enviadas",
       "alwaysOutputData": true,
       "credentials": {
@@ -251,7 +252,7 @@
         2240,
         -64
       ],
-      "id": "fd070682-693c-4bc4-b675-a7f62809fd5f",
+      "id": "8759ba15-129d-49c9-aef4-ff3d1de368a1",
       "name": "Quitar duplicados"
     },
     {
@@ -339,7 +340,7 @@
         2464,
         -160
       ],
-      "id": "96a6b075-79ba-47bd-bb0f-0f943e302ed8",
+      "id": "81fcdff9-64d2-4c84-b28f-1caed2c986e8",
       "name": "Append row in sheet",
       "credentials": {
         "googleApi": {
@@ -350,17 +351,17 @@
     },
     {
       "parameters": {
-        "content": "Cuando veas que va bien, cambia a todos quitando .slice(1, 10).",
+        "content": "Segunda parte de data 21a40",
         "height": 80,
-        "width": 256
+        "width": 150
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        1040,
-        -176
+        1088,
+        -160
       ],
-      "id": "0cddde8b-20d4-4987-89a3-f8ce66997d1f",
+      "id": "783477a0-86a6-4ed8-98ac-69f8ba2563aa",
       "name": "Sticky Note"
     }
   ],
@@ -543,17 +544,17 @@
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
-  "versionId": "f4bd3319-8959-44d5-a95d-dcd4f8305f0b",
-  "activeVersionId": "f4bd3319-8959-44d5-a95d-dcd4f8305f0b",
-  "versionCounter": 162,
+  "versionId": "4880f9ad-4e4c-491a-bae3-397b5eadebeb",
+  "activeVersionId": "4880f9ad-4e4c-491a-bae3-397b5eadebeb",
+  "versionCounter": 8,
   "triggerCount": 1,
   "tags": [],
   "shared": [
     {
-      "updatedAt": "2026-05-09T10:32:21.122Z",
-      "createdAt": "2026-05-09T10:32:21.122Z",
+      "updatedAt": "2026-05-21T15:04:20.612Z",
+      "createdAt": "2026-05-21T15:04:20.612Z",
       "role": "workflow:owner",
-      "workflowId": "xwmcCxJNeoC7vxM4",
+      "workflowId": "4vFFhB7QFlH3ij3D",
       "projectId": "Oydmi9LKo6hnXrnp",
       "project": {
         "updatedAt": "2026-04-20T15:31:20.051Z",
@@ -568,7 +569,7 @@
     }
   ],
   "versionMetadata": {
-    "name": "Version f4bd3319",
+    "name": "Version 4880f9ad",
     "description": ""
   }
 }
