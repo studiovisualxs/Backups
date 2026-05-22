@@ -4,7 +4,7 @@
   "id": "xwmcCxJNeoC7vxM4",
   "name": "Alertas PLACSP - DIARIO AUTOMATICO",
   "description": null,
-  "active": false,
+  "active": true,
   "isArchived": false,
   "nodes": [
     {
@@ -547,8 +547,8 @@
   },
   "pinData": {},
   "versionId": "f104b445-296b-4882-8a85-2d57f9139c36",
-  "activeVersionId": null,
-  "versionCounter": 201,
+  "activeVersionId": "f104b445-296b-4882-8a85-2d57f9139c36",
+  "versionCounter": 203,
   "triggerCount": 1,
   "tags": [],
   "shared": [
@@ -571,7 +571,7 @@
     }
   ],
   "versionMetadata": {
-    "name": null,
-    "description": null
+    "name": "Version f104b445",
+    "description": ""
   }
 }
