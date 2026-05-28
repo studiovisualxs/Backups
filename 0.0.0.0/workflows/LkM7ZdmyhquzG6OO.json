@@ -1,0 +1,58 @@
+{
+  "updatedAt": "2026-04-23T15:35:03.750Z",
+  "createdAt": "2026-04-23T15:29:54.521Z",
+  "id": "LkM7ZdmyhquzG6OO",
+  "name": "Error Handler Test",
+  "description": null,
+  "active": false,
+  "isArchived": true,
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "4b1741c1-a617-4c28-a764-2aca2728c2f8",
+      "name": "Error Trigger"
+    }
+  ],
+  "connections": {},
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "15699bf3-9d18-49a5-9fe9-03215b47791f",
+  "activeVersionId": null,
+  "versionCounter": 3,
+  "triggerCount": 0,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-04-23T15:29:54.521Z",
+      "createdAt": "2026-04-23T15:29:54.521Z",
+      "role": "workflow:owner",
+      "workflowId": "LkM7ZdmyhquzG6OO",
+      "projectId": "Oydmi9LKo6hnXrnp",
+      "project": {
+        "updatedAt": "2026-04-20T15:31:20.051Z",
+        "createdAt": "2026-04-20T15:12:06.805Z",
+        "id": "Oydmi9LKo6hnXrnp",
+        "name": "Ximo Soler <grafico@addoimpresores.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "3068be6c-0e51-439e-8bf9-e72776c398e1"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

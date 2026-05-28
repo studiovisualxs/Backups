@@ -1,0 +1,116 @@
+{
+  "updatedAt": "2026-04-28T09:04:51.069Z",
+  "createdAt": "2026-04-24T07:21:53.619Z",
+  "id": "ErfWfOoAMpt18zMK",
+  "name": "AI Agente",
+  "description": null,
+  "active": false,
+  "isArchived": true,
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        -80
+      ],
+      "id": "051c87ae-3d15-4deb-b3d6-2839e9b76b94",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "authentication": "privateKey",
+        "command": "ls -la ~/Documents"
+      },
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        -192,
+        -80
+      ],
+      "id": "3cba041e-1273-4bec-96d8-35ce2ecc0fcb",
+      "name": "Execute a command",
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "5maARIRuGEHZ1Yff",
+          "name": "SSH Private Key account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "trigger": [
+          "message"
+        ],
+        "watchWorkspace": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.slackTrigger",
+      "typeVersion": 1,
+      "position": [
+        176,
+        -352
+      ],
+      "id": "7371d709-1b9f-4c0e-b2f7-21699d223193",
+      "name": "Slack Trigger",
+      "webhookId": "a973322c-059d-4efe-b58b-5394731af763",
+      "credentials": {
+        "slackApi": {
+          "id": "WaJHfqUGp7gRAWL6",
+          "name": "Slack account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Execute a command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "13202b8b-8f51-4ac2-a322-2385e376a7e7",
+  "activeVersionId": null,
+  "versionCounter": 42,
+  "triggerCount": 0,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-04-24T07:21:53.619Z",
+      "createdAt": "2026-04-24T07:21:53.619Z",
+      "role": "workflow:owner",
+      "workflowId": "ErfWfOoAMpt18zMK",
+      "projectId": "Oydmi9LKo6hnXrnp",
+      "project": {
+        "updatedAt": "2026-04-20T15:31:20.051Z",
+        "createdAt": "2026-04-20T15:12:06.805Z",
+        "id": "Oydmi9LKo6hnXrnp",
+        "name": "Ximo Soler <grafico@addoimpresores.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "3068be6c-0e51-439e-8bf9-e72776c398e1"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

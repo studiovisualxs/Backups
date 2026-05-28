@@ -1,0 +1,575 @@
+{
+  "updatedAt": "2026-05-21T16:03:21.004Z",
+  "createdAt": "2026-05-21T15:03:27.127Z",
+  "id": "1yBlOxf864tjs4eY",
+  "name": "Alertas PLACSP de 21a30",
+  "description": null,
+  "active": false,
+  "isArchived": true,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": "=15\n",
+              "triggerAtMinute": 30
+            }
+          ]
+        }
+      },
+      "id": "4062bba8-3200-4af1-9690-d52d429c2acd",
+      "name": "Cada día",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        -160
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "ec2235b1-0f97-411f-8500-ebd71ba0072a",
+      "name": "Ejecutar manual",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "1v3NHRruLYk3CmArePxKXpfAp2Zhozvq-Jg8X4tjM3lc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "config",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "248fdcf3-b1ca-4aee-abaa-b7b96f857490",
+      "name": "Leer configuración",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        -64
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "WqqKIfHDEaQErgAl",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json);\n\nconst config = {};\n\nfor (const row of rows) {\n  const key = String(row.campo || '').trim();\n  const value = row.valor ?? '';\n\n  if (key) config[key] = value;\n}\n\nfunction splitList(value) {\n  return String(value || '')\n    .split(',')\n    .map(v => v.trim())\n    .filter(Boolean);\n}\n\nconst now = new Date();\nconst yyyy = now.getFullYear();\nconst mm = String(now.getMonth() + 1).padStart(2, '0');\n\nconst feedUrlAuto = `https://contrataciondelsectorpublico.gob.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3_${yyyy}${mm}.zip`;\n\nreturn [{\n  json: {\n    feed_url: config.feed_url && String(config.feed_url).trim()\n      ? String(config.feed_url).trim()\n      : feedUrlAuto,\n\n    keywords: splitList(config.keywords),\n    exclude_keywords: splitList(config.exclude_keywords),\n    provincias: splitList(config.provincia),\n    cpvs: splitList(config.cpv),\n\n    importe_min: Number(config.importe_min || 0),\n    email_destino: String(config.email_destino || '').trim(),\n    max_resultados: Number(config.max_resultados || 25),\n    solo_abiertas: String(config.solo_abiertas || '').toLowerCase() === 'sí',\n    frecuencia: String(config.frecuencia || 'diaria').trim()\n  }\n}];"
+      },
+      "id": "697b2dcd-c0d3-4edd-beb0-9acf72667a93",
+      "name": "Normalizar configuración",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.feed_url}}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        672,
+        -64
+      ],
+      "id": "373c6618-f0c6-48a5-82aa-0b04dae4db41",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "outputPrefix": "data_"
+      },
+      "type": "n8n-nodes-base.compression",
+      "typeVersion": 1.1,
+      "position": [
+        896,
+        -64
+      ],
+      "id": "815dd0e3-6455-4812-b848-7df551c31d01",
+      "name": "Compression"
+    },
+    {
+      "parameters": {
+        "operation": "text",
+        "binaryPropertyName": "={{$json.binary_field}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        1344,
+        -64
+      ],
+      "id": "cd6f9ed9-38f6-4ea4-bf46-0ded968f15cf",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.xml",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        -64
+      ],
+      "id": "7244c219-6612-4bcc-bf80-82bf9c98c0c8",
+      "name": "XML"
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Normalizar configuración').first().json;\nconst allInputs = $input.all();\n\nconst keywords = config.keywords || [];\nconst excludeKeywords = config.exclude_keywords || [];\nconst provincias = config.provincias || [];\nconst cpvs = config.cpvs || [];\nconst maxResultados = Number(config.max_resultados || 100);\n\nfunction textOf(value) {\n  if (!value) return '';\n  if (typeof value === 'string') return value;\n  if (value._) return value._;\n  if (value['#text']) return value['#text'];\n  return JSON.stringify(value);\n}\n\nfunction normalizeCpv(value) {\n  return String(value || '')\n    .toLowerCase()\n    .replace(/[^0-9]/g, '');\n}\n\nfunction getEntries(xml) {\n  const feed = xml.feed || xml;\n  let entries = feed.entry || [];\n\n  if (!entries) return [];\n  if (!Array.isArray(entries)) entries = [entries];\n\n  return entries;\n}\n\nconst resultados = [];\n\nfor (const input of allInputs) {\n  const entries = getEntries(input.json);\n\n  for (const entry of entries) {\n    const title = textOf(entry.title);\n    const summary = textOf(entry.summary);\n    const id = textOf(entry.id);\n    const updated = textOf(entry.updated);\n    const content = textOf(entry.content);\n\n    let link = '';\n\n    if (Array.isArray(entry.link)) {\n      const alt = entry.link.find(l => l.rel === 'alternate') || entry.link[0];\n      link = alt?.href || '';\n    } else if (entry.link) {\n      link = entry.link.href || '';\n    }\n\n    const texto = JSON.stringify(entry).toLowerCase();\n    const textoCpvNormalizado = normalizeCpv(texto);\n\n    const pasaKeyword =\n      keywords.length === 0 ||\n      keywords.some(k => texto.includes(String(k).toLowerCase()));\n\n    const pasaExclusion =\n      excludeKeywords.length === 0 ||\n      !excludeKeywords.some(k => texto.includes(String(k).toLowerCase()));\n\n    const pasaProvincia =\n      provincias.length === 0 ||\n      provincias.some(p => texto.includes(String(p).toLowerCase()));\n\n    const pasaCpv =\n      cpvs.length === 0 ||\n      cpvs.some(cpv => {\n        const cpvNormalizado = normalizeCpv(cpv);\n        return cpvNormalizado && textoCpvNormalizado.includes(cpvNormalizado);\n      });\n\n    if (pasaKeyword && pasaExclusion && pasaProvincia && pasaCpv) {\n      resultados.push({\n        id,\n        title,\n        summary,\n        updated,\n        link,\n      });\n    }\n  }\n}\n\nconst unicos = Array.from(\n  new Map(\n    resultados.map(r => [\n      r.id || r.link || r.title,\n      r,\n    ])\n  ).values()\n);\n\nconst salida = unicos.slice(0, maxResultados);\n\nif (salida.length === 0) {\n  return [{\n    json: {\n      id: 'sin-resultados',\n      title: 'No se encontraron licitaciones con los filtros actuales',\n      summary: 'Prueba ampliando keywords, quitando CPV o dejando provincia vacía.',\n      updated: new Date().toISOString(),\n      link: '',\n    }\n  }];\n}\n\nreturn salida.map(r => ({ json: r }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        -64
+      ],
+      "id": "3a8cbccb-5def-4a70-b35d-a0985d416209",
+      "name": "Filtrar licitaciones"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst config = $('Normalizar configuración').first().json;\n\nconst rows = items.map((item, index) => {\n  const r = item.json;\n  return `\n    <tr>\n      <td>${index + 1}</td>\n      <td><strong>${r.title || ''}</strong><br>${r.summary || ''}</td>\n      <td><a href=\"${r.link || '#'}\">Ver licitación</a></td>\n      <td>${r.updated || ''}</td>\n    </tr>\n  `;\n}).join('');\n\nconst html = `\n<h2>Nuevas licitaciones encontradas</h2>\n<p>Se han encontrado <strong>${items.length}</strong> licitaciones.</p>\n\n<table border=\"1\" cellpadding=\"8\" cellspacing=\"0\">\n  <thead>\n    <tr>\n      <th>#</th>\n      <th>Licitación</th>\n      <th>Enlace</th>\n      <th>Fecha</th>\n    </tr>\n  </thead>\n  <tbody>\n    ${rows}\n  </tbody>\n</table>\n`;\n\nreturn [{\n  json: {\n    email_destino: config.email_destino,\n    subject: `Alertas licitaciones: ${items.length} resultados`,\n    html,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2464,
+        32
+      ],
+      "id": "7541bb80-ae72-4726-b58e-0a4cbbaaca76",
+      "name": "Preparar email"
+    },
+    {
+      "parameters": {
+        "fromEmail": "studiovisual.xs@gmail.com",
+        "toEmail": "={{$json.email_destino}}",
+        "subject": "={{$json.subject}}",
+        "html": "={{$json.html}}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2688,
+        32
+      ],
+      "id": "0820e6b1-0464-4236-9bb7-06cc0432e874",
+      "name": "Send an Email",
+      "webhookId": "b81bb927-f4b1-4b1f-9315-ac2477e013d1",
+      "credentials": {
+        "smtp": {
+          "id": "7s7pTTjulVSpVWUt",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst binaries = item.binary || {};\n\nreturn Object.keys(binaries)\n  .filter(key => key.startsWith('data'))\n  .slice(21, 30)\n  .map(key => ({\n    json: {\n      binary_field: key,\n    },\n    binary: {\n      [key]: binaries[key],\n    },\n  }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -64
+      ],
+      "id": "84038e99-38c1-4f4d-be31-da8966e217a3",
+      "name": "Preparar archivos XML"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "1v3NHRruLYk3CmArePxKXpfAp2Zhozvq-Jg8X4tjM3lc",
+          "mode": "list",
+          "cachedResultName": "plantilla-alertas-licitaciones-n8n",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1v3NHRruLYk3CmArePxKXpfAp2Zhozvq-Jg8X4tjM3lc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 458104394,
+          "mode": "list",
+          "cachedResultName": "enviadas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1v3NHRruLYk3CmArePxKXpfAp2Zhozvq-Jg8X4tjM3lc/edit#gid=458104394"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2016,
+        -64
+      ],
+      "id": "15fc984c-7ff5-48ff-8d5e-50222ef077c8",
+      "name": "Leer enviadas",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleApi": {
+          "id": "WqqKIfHDEaQErgAl",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const nuevas = $('Filtrar licitaciones').all();\nconst enviadas = $input.all();\n\nconst idsEnviados = new Set(\n  enviadas\n    .map(i => i.json.id_licitacion)\n    .filter(Boolean)\n);\n\nconst resultado = nuevas.filter(item => {\n  const id = item.json.id;\n  return id && !idsEnviados.has(id);\n});\n\nreturn resultado;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        -64
+      ],
+      "id": "5cd4d303-31b6-415f-934b-a5a5b476a321",
+      "name": "Quitar duplicados"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1v3NHRruLYk3CmArePxKXpfAp2Zhozvq-Jg8X4tjM3lc",
+          "mode": "list",
+          "cachedResultName": "plantilla-alertas-licitaciones-n8n",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1v3NHRruLYk3CmArePxKXpfAp2Zhozvq-Jg8X4tjM3lc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 458104394,
+          "mode": "list",
+          "cachedResultName": "enviadas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1v3NHRruLYk3CmArePxKXpfAp2Zhozvq-Jg8X4tjM3lc/edit#gid=458104394"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id_licitacion": "={{$json.id}}",
+            "fecha_envio": "={{$now}}",
+            "titulo": "={{$json.title}}",
+            "enlace": "={{$json.link}}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "id_licitacion",
+              "displayName": "id_licitacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha_envio",
+              "displayName": "fecha_envio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "titulo",
+              "displayName": "titulo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "enlace",
+              "displayName": "enlace",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2464,
+        -160
+      ],
+      "id": "5924d409-1f2c-42aa-a177-f2baf452967d",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleApi": {
+          "id": "WqqKIfHDEaQErgAl",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "Segunda parte de data 21a40",
+        "height": 80,
+        "width": 150
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1088,
+        -160
+      ],
+      "id": "32ad5227-9a9f-44f1-a1e7-276a1a469432",
+      "name": "Sticky Note"
+    }
+  ],
+  "connections": {
+    "Cada día": {
+      "main": [
+        [
+          {
+            "node": "Leer configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ejecutar manual": {
+      "main": [
+        [
+          {
+            "node": "Leer configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer configuración": {
+      "main": [
+        [
+          {
+            "node": "Normalizar configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar configuración": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Compression",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compression": {
+      "main": [
+        [
+          {
+            "node": "Preparar archivos XML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "XML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "XML": {
+      "main": [
+        [
+          {
+            "node": "Filtrar licitaciones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar licitaciones": {
+      "main": [
+        [
+          {
+            "node": "Leer enviadas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar email": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar archivos XML": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer enviadas": {
+      "main": [
+        [
+          {
+            "node": "Quitar duplicados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quitar duplicados": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Preparar email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send an Email": {
+      "main": [
+        []
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "UslOMwwiH98sBT9V",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": {
+    "node:Cada día": {
+      "recurrenceRules": [
+        0
+      ]
+    }
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "0a3ae656-f030-464f-9bfb-44c5ca45e519",
+  "activeVersionId": null,
+  "versionCounter": 11,
+  "triggerCount": 1,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-05-21T15:03:27.127Z",
+      "createdAt": "2026-05-21T15:03:27.127Z",
+      "role": "workflow:owner",
+      "workflowId": "1yBlOxf864tjs4eY",
+      "projectId": "Oydmi9LKo6hnXrnp",
+      "project": {
+        "updatedAt": "2026-04-20T15:31:20.051Z",
+        "createdAt": "2026-04-20T15:12:06.805Z",
+        "id": "Oydmi9LKo6hnXrnp",
+        "name": "Ximo Soler <grafico@addoimpresores.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "3068be6c-0e51-439e-8bf9-e72776c398e1"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

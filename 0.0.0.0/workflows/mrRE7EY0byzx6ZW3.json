@@ -1,0 +1,1025 @@
+{
+  "updatedAt": "2026-05-08T08:01:55.117Z",
+  "createdAt": "2026-05-08T07:37:44.297Z",
+  "id": "mrRE7EY0byzx6ZW3",
+  "name": "WhatsApp Router Unificado Trello + PDF",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-entrada-unificada",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -896,
+        384
+      ],
+      "id": "d8428bef-0855-4d60-9c49-5d6ed903cf76",
+      "name": "Webhook",
+      "webhookId": "faa7127c-b4aa-4a3d-866e-14efb0c2abb8"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "37b05a3a-f5eb-4f99-9c97-464f1b9d0304",
+              "name": "boardId",
+              "value": "5ff2d7873b288c34fbc1b918",
+              "type": "string"
+            },
+            {
+              "id": "27a3f840-ec48-425a-a6b0-16c8e0d972cc",
+              "name": "allowedGroupJid",
+              "value": "120363425302477785@g.us",
+              "type": "string"
+            },
+            {
+              "id": "wl-allowed-participants",
+              "name": "allowedParticipantsCsv",
+              "value": "REEMPLAZAR_1@s.whatsapp.net,REEMPLAZAR_2@s.whatsapp.net",
+              "type": "string"
+            },
+            {
+              "id": "router-notes",
+              "name": "notes",
+              "value": "Rellena allowedParticipantsCsv con participants reales o deja REEMPLAZAR_ para desactivar lista blanca.",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -672,
+        384
+      ],
+      "id": "8aca717f-8846-4f5b-b176-b00892245ff2",
+      "name": "Configuración"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $(\"Webhook\").first().json;\nconst cfg = $(\"Configuración\").first().json;\n\nconst data = raw.body?.body?.data || raw.body?.data || {};\nconst remoteJid = data.key?.remoteJid || '';\nconst participant = data.key?.participant || '';\nconst isGroup = String(remoteJid).endsWith('@g.us');\n\nconst message = data.message || {};\n\nfunction findDocumentMessage(message) {\n  if (!message || typeof message !== 'object') return null;\n  if (message.documentMessage) return message.documentMessage;\n  if (message.documentWithCaptionMessage?.message?.documentMessage) return message.documentWithCaptionMessage.message.documentMessage;\n  if (message.viewOnceMessage?.message?.documentMessage) return message.viewOnceMessage.message.documentMessage;\n  if (message.ephemeralMessage?.message?.documentMessage) return message.ephemeralMessage.message.documentMessage;\n  if (message.ephemeralMessage?.message?.documentWithCaptionMessage?.message?.documentMessage) {\n    return message.ephemeralMessage.message.documentWithCaptionMessage.message.documentMessage;\n  }\n  return null;\n}\n\nconst documentMessage = findDocumentMessage(message);\nconst hasDocumentMessage = !!documentMessage;\n\nconst messageText =\n  message?.conversation ||\n  message?.extendedTextMessage?.text ||\n  message?.imageMessage?.caption ||\n  message?.videoMessage?.caption ||\n  raw.body?.body?.body?.test ||\n  '';\n\nconst originalQuestion = String(messageText || '').trim();\nconst hasGroupPrefix = /^(?:\\/tr\\b|tr\\b)/i.test(originalQuestion);\n\nconst normalize = (value = '') =>\n  String(value)\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '')\n    .toLowerCase()\n    .trim();\n\nconst normalizedOriginal = normalize(originalQuestion);\n\nconst mentionedJid =\n  message?.extendedTextMessage?.contextInfo?.mentionedJid ||\n  message?.imageMessage?.contextInfo?.mentionedJid ||\n  message?.videoMessage?.contextInfo?.mentionedJid ||\n  [];\n\nconst mentionText =\n  message?.extendedTextMessage?.contextInfo?.participant ||\n  message?.extendedTextMessage?.contextInfo?.stanzaId ||\n  '';\n\nconst hasMention =\n  (Array.isArray(mentionedJid) && mentionedJid.length > 0) ||\n  /@\\d{5,}/.test(originalQuestion) ||\n  Boolean(mentionText);\n\nconst mentionsTrelloWord = /\\btrello\\b/i.test(originalQuestion);\n\nconst allowedGroupJid = cfg.allowedGroupJid || 'REEMPLAZAR_POR_TU_GRUPO@g.us';\nconst boardId = cfg.boardId || '5ff2d7873b288c34fbc1b918';\nconst allowedParticipantsCsv = cfg.allowedParticipantsCsv || '';\n\nconst allowedParticipants = String(allowedParticipantsCsv)\n  .split(/[,;\\n]/)\n  .map(item => item.trim())\n  .filter(Boolean);\n\nconst hasWhitelist = allowedParticipants.length > 0 &&\n  !allowedParticipants.some(item => item.startsWith('REEMPLAZAR_'));\n\nconst normalizedAllowedParticipants = allowedParticipants.map(item => item.toLowerCase());\nconst normalizedParticipant = String(participant || '').toLowerCase();\n\nconst isAllowedGroup = isGroup && remoteJid === allowedGroupJid;\nconst isAllowedParticipant = !hasWhitelist || normalizedAllowedParticipants.includes(normalizedParticipant);\nconst likelyForBot = mentionsTrelloWord || hasMention;\n\nconst shouldRespond = !hasDocumentMessage && isAllowedGroup && hasGroupPrefix && isAllowedParticipant;\nconst shouldWarn = !hasDocumentMessage && isAllowedGroup && !hasGroupPrefix && likelyForBot && isAllowedParticipant;\nconst shouldUnauthorized = !hasDocumentMessage && isAllowedGroup && hasGroupPrefix && !isAllowedParticipant;\n\nconst question = shouldRespond\n  ? originalQuestion.replace(/^(?:\\/tr\\b|tr\\b)\\s*/i, '').trim()\n  : originalQuestion;\n\nconst replyTarget = isGroup ? remoteJid : String(remoteJid || '').split('@')[0];\n\nreturn [\n  {\n    json: {\n      ...raw,\n      boardId,\n      allowedGroupJid,\n      allowedParticipantsCsv,\n      allowedParticipants,\n      hasWhitelist,\n      originalQuestion,\n      question,\n      normalizedQuestion: normalize(question),\n      normalizedOriginal,\n      remoteJid,\n      participant,\n      isGroup,\n      isAllowedGroup,\n      isAllowedParticipant,\n      hasDocumentMessage,\n      shouldRespond,\n      shouldWarn,\n      shouldUnauthorized,\n      usedPrefix: hasGroupPrefix,\n      hasMention,\n      mentionsTrelloWord,\n      replyTarget,\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        96
+      ],
+      "id": "f6ab49cc-eb64-481d-b089-092275606055",
+      "name": "Normalizar entrada"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.shouldRespond }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        96
+      ],
+      "id": "da540f83-f166-458f-ae29-a5c956a81f6b",
+      "name": "¿Procesar mensaje?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.shouldWarn || $json.shouldUnauthorized }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        448,
+        384
+      ],
+      "id": "b04b9e29-3bb0-4390-bf18-b8a55c58011b",
+      "name": "¿Avisar uso /tr?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const req = $(\"Normalizar entrada\").first().json;\n\nlet output = '';\n\nif (req.shouldUnauthorized) {\n  output = 'No tienes permiso para usar este asistente en este grupo.';\n} else {\n  output = `Para usar el asistente en este grupo, empieza con /tr o tr.\\n\\nPrueba por ejemplo:\\n- tr ayuda\\n- tr listas\\n- tr tarjetas en progreso con etiqueta urgente\\n- tr tarjetas que vencen hoy`;\n}\n\nreturn [\n  {\n    json: {\n      number: req.replyTarget,\n      output,\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        384
+      ],
+      "id": "27e728ca-26e9-49f8-b6e6-22ed93ee887a",
+      "name": "Aviso usar /tr"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        576
+      ],
+      "id": "e0323f80-5e8e-4a19-b180-77f3ddbede28",
+      "name": "Ignorar mensaje"
+    },
+    {
+      "parameters": {
+        "resource": "board",
+        "operation": "get",
+        "id": {
+          "__rl": true,
+          "value": "={{ $(\"Configuración\").first().json.boardId }}",
+          "mode": "id"
+        },
+        "additionalFields": {
+          "fields": "all"
+        }
+      },
+      "type": "n8n-nodes-base.trello",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "6e1a9407-6049-43c1-8709-d6d180466660",
+      "name": "Trello: tablero",
+      "credentials": {
+        "trelloApi": {
+          "id": "pMalmbsSuNQ1FKpX",
+          "name": "Trello account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "list",
+        "operation": "getAll",
+        "id": "={{ $(\"Configuración\").first().json.boardId }}",
+        "returnAll": true,
+        "additionalFields": {
+          "fields": "all"
+        }
+      },
+      "type": "n8n-nodes-base.trello",
+      "typeVersion": 1,
+      "position": [
+        0,
+        192
+      ],
+      "id": "eb038ba5-c6aa-45ef-803a-f31dc981f660",
+      "name": "Trello: listas del tablero",
+      "credentials": {
+        "trelloApi": {
+          "id": "pMalmbsSuNQ1FKpX",
+          "name": "Trello account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const req = $(\"Normalizar entrada\").first().json;\nconst question = req.normalizedQuestion || '';\nconst lists = $input.all().map(item => item.json);\n\nconst normalize = (value = '') =>\n  String(value)\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '')\n    .toLowerCase()\n    .trim();\n\nconst q = normalize(question);\n\nconst explicitMatches = lists.filter(list => {\n  const name = normalize(list.name);\n  return name && q.includes(name);\n});\n\nconst semanticBuckets = [\n  {\n    keywords: ['pendiente', 'pendientes', 'backlog', 'por hacer', 'por-hacer', 'todo', 'to do', 'abierto', 'abierta', 'nueva', 'nuevas'],\n    listTerms: ['pendiente', 'backlog', 'por hacer', 'por-hacer', 'todo', 'to do', 'abierto', 'idea', 'ideas', 'nueva', 'nuevas'],\n  },\n  {\n    keywords: ['progreso', 'en progreso', 'haciendo', 'doing', 'curso', 'en curso', 'trabajando', 'actual'],\n    listTerms: ['progreso', 'doing', 'curso', 'trabajando', 'actual', 'desarrollo'],\n  },\n  {\n    keywords: ['finalizado', 'finalizadas', 'hecho', 'hechas', 'terminado', 'terminadas', 'done', 'cerrado', 'cerradas', 'completado', 'completadas'],\n    listTerms: ['final', 'done', 'hecho', 'terminado', 'cerrado', 'complet'],\n  },\n  {\n    keywords: ['bloqueado', 'bloqueadas', 'impedimento', 'impedimentos', 'blocked'],\n    listTerms: ['bloque', 'imped', 'blocked'],\n  },\n];\n\nlet semanticMatches = [];\nfor (const bucket of semanticBuckets) {\n  if (bucket.keywords.some(keyword => q.includes(keyword))) {\n    const matches = lists.filter(list => {\n      const name = normalize(list.name);\n      return bucket.listTerms.some(term => name.includes(term));\n    });\n    semanticMatches.push(...matches);\n  }\n}\n\nconst dedupe = (items) => {\n  const seen = new Set();\n  return items.filter(item => {\n    if (!item?.id || seen.has(item.id)) return false;\n    seen.add(item.id);\n    return true;\n  });\n};\n\nlet selected = dedupe([...explicitMatches, ...semanticMatches]);\n\nif (selected.length === 0) {\n  selected = lists;\n}\n\nreturn selected.map(list => ({\n  json: {\n    listId: list.id,\n    listName: list.name,\n    question: req.question,\n    normalizedQuestion: req.normalizedQuestion,\n    replyTarget: req.replyTarget,\n    isGroup: req.isGroup,\n    shouldRespond: req.shouldRespond,\n    originalQuestion: req.originalQuestion,\n    boardId: req.boardId,\n    allowedGroupJid: req.allowedGroupJid,\n  },\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        192
+      ],
+      "id": "c3699089-34cc-40d4-89e8-090ca9117b8f",
+      "name": "Preparar listas para tarjetas"
+    },
+    {
+      "parameters": {
+        "resource": "list",
+        "operation": "getCards",
+        "id": "={{ $json.listId }}",
+        "returnAll": true,
+        "additionalFields": {
+          "fields": "all"
+        }
+      },
+      "type": "n8n-nodes-base.trello",
+      "typeVersion": 1,
+      "position": [
+        448,
+        192
+      ],
+      "id": "4584985d-a337-4b51-afbd-497c031c408c",
+      "name": "Trello: tarjetas de listas",
+      "alwaysOutputData": true,
+      "credentials": {
+        "trelloApi": {
+          "id": "pMalmbsSuNQ1FKpX",
+          "name": "Trello account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const req = $(\"Normalizar entrada\").first().json;\nconst board = $(\"Trello: tablero\").first()?.json || {};\nconst allLists = $(\"Trello: listas del tablero\").all().map(item => item.json);\nconst selectedLists = $(\"Preparar listas para tarjetas\").all().map(item => item.json);\nconst rawCards = $input.all().map(item => item.json).filter(card => card && Object.keys(card).length > 0);\n\nconst normalize = (value = '') =>\n  String(value)\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '')\n    .toLowerCase()\n    .trim();\n\nconst q = normalize(req.normalizedQuestion || req.question || '');\nconst boardName = board.name || 'tu tablero';\n\nconst listNameById = new Map(allLists.map(list => [list.id, list.name]));\nconst selectedListIds = new Set(selectedLists.map(list => list.listId));\n\nconst cards = rawCards.map(card => ({\n  ...card,\n  listName: listNameById.get(card.idList) || card.listName || 'Sin lista',\n}));\n\nconst cardsByListId = new Map();\nfor (const list of allLists) {\n  cardsByListId.set(list.id, []);\n}\nfor (const card of cards) {\n  if (!cardsByListId.has(card.idList)) {\n    cardsByListId.set(card.idList, []);\n  }\n  cardsByListId.get(card.idList).push(card);\n}\n\nconst totalCards = Array.from(cardsByListId.values()).reduce((acc, items) => acc + items.length, 0);\n\nfunction truncate(text, max = 180) {\n  const value = String(text || '').replace(/\\s+/g, ' ').trim();\n  if (!value) return '';\n  return value.length > max ? `${value.slice(0, max - 1)}…` : value;\n}\n\nfunction bullets(items, max = 12) {\n  return items.slice(0, max).map(item => `- ${item}`).join('\\n');\n}\n\nfunction numbered(items, max = 8) {\n  return items.slice(0, max).map((item, idx) => `${idx + 1}. ${item}`).join('\\n');\n}\n\nfunction formatDateES(dateValue) {\n  if (!dateValue) return '';\n  const date = new Date(dateValue);\n  if (Number.isNaN(date.getTime())) return '';\n  return date.toLocaleDateString('es-ES');\n}\n\nfunction uniqueById(items) {\n  const seen = new Set();\n  return items.filter(item => {\n    if (!item?.id || seen.has(item.id)) return false;\n    seen.add(item.id);\n    return true;\n  });\n}\n\nfunction formatCard(card) {\n  const parts = [card.name];\n\n  const labelNames = Array.isArray(card.labels)\n    ? card.labels.map(label => label.name || label.color).filter(Boolean)\n    : [];\n\n  if (labelNames.length) {\n    parts.push(`etiquetas: ${labelNames.slice(0, 3).join(', ')}`);\n  }\n\n  if (card.due) {\n    const due = formatDateES(card.due);\n    if (due) {\n      parts.push(`vence ${due}`);\n    }\n  }\n\n  if (card.closed) {\n    parts.push('cerrada');\n  }\n\n  return parts.join(' · ');\n}\n\nfunction buildCardDetails(card) {\n  const lines = [`La tarjeta \"${card.name}\" está en la lista \"${card.listName}\".`];\n\n  if (card.due) {\n    const due = formatDateES(card.due);\n    if (due) {\n      lines.push(`Vence el ${due}.`);\n    }\n  }\n\n  if (Array.isArray(card.labels) && card.labels.length) {\n    const labels = card.labels.map(label => label.name || label.color).filter(Boolean).slice(0, 8);\n    if (labels.length) {\n      lines.push(`Etiquetas: ${labels.join(', ')}.`);\n    }\n  }\n\n  if (card.desc) {\n    lines.push(`Descripción: ${truncate(card.desc, 220)}`);\n  }\n\n  const url = card.shortUrl || card.url;\n  if (url) {\n    lines.push(`Enlace: ${url}`);\n  }\n\n  return lines.join(' ');\n}\n\nfunction detectMatchedLists() {\n  const explicitMatches = allLists.filter(list => q.includes(normalize(list.name)));\n  if (explicitMatches.length) return explicitMatches;\n\n  const semantic = [];\n  const addMatches = (keywords, terms) => {\n    if (keywords.some(keyword => q.includes(keyword))) {\n      semantic.push(\n        ...allLists.filter(list => {\n          const name = normalize(list.name);\n          return terms.some(term => name.includes(term));\n        }),\n      );\n    }\n  };\n\n  addMatches(\n    ['pendiente', 'pendientes', 'backlog', 'por hacer', 'por-hacer', 'todo', 'to do', 'abierto', 'abierta'],\n    ['pendiente', 'backlog', 'por hacer', 'por-hacer', 'todo', 'to do', 'abierto', 'idea']\n  );\n  addMatches(\n    ['progreso', 'en progreso', 'haciendo', 'doing', 'curso', 'en curso', 'trabajando', 'actual'],\n    ['progreso', 'doing', 'curso', 'trabajando', 'actual', 'desarrollo']\n  );\n  addMatches(\n    ['finalizado', 'finalizadas', 'hecho', 'hechas', 'terminado', 'terminadas', 'done', 'cerrado', 'cerradas', 'completado', 'completadas'],\n    ['final', 'done', 'hecho', 'terminado', 'cerrado', 'complet']\n  );\n  addMatches(\n    ['bloqueado', 'bloqueadas', 'impedimento', 'impedimentos', 'blocked'],\n    ['bloque', 'imped', 'blocked']\n  );\n\n  return uniqueById(semantic);\n}\n\nfunction tokenize(text) {\n  return normalize(text)\n    .replace(/[^a-z0-9\\s]/g, ' ')\n    .split(/\\s+/)\n    .filter(Boolean);\n}\n\nfunction extractSearchTokens() {\n  const stopwords = new Set([\n    'dime','di','que','cual','cuales','el','la','los','las','un','una','unos','unas',\n    'de','del','al','y','o','en','por','para','con','sin','mi','mis','tu','tus','su','sus',\n    'tablero','board','lista','listas','tarjeta','tarjetas','card','cards','tarea','tareas',\n    'hay','tengo','tenemos','muestrame','muéstrame','ver','mostrar','ensename','enséñame',\n    'buscar','busca','encuentra','detalle','detalles','estado','general','trabajos','trabajo',\n    'pendiente','pendientes','progreso','finalizado','finalizadas','hecho','hechas','terminado','terminadas',\n    'bloqueado','bloqueadas','checklist','checklists','adjunto','adjuntos','miembro','miembros',\n    'nombre','nombres','exacto','exacta','sobre','quiero','favor','donde','dónde','esta','está',\n    'abre','abrir','link','enlace','url','lleva','llevame','llévame','ensena','enseña',\n    'numero','número','num','opcion','opción','opciones','resultado','resultados',\n    'etiqueta','etiquetas','fecha','fechas','vence','vencen','vencimiento','vencimientos',\n    'hoy','mañana','manana','ayer','semana','mes','esta','este','atrasadas','atrasados',\n    'ayuda','comandos','como','cómo'\n  ]);\n\n  let working = q;\n  for (const list of allLists) {\n    const listName = normalize(list.name);\n    if (listName) {\n      working = working.replace(listName, ' ');\n    }\n  }\n\n  return tokenize(working).filter(token => !stopwords.has(token) && token.length > 1);\n}\n\nfunction getDateKeywords(dateValue) {\n  if (!dateValue) return [];\n  const date = new Date(dateValue);\n  if (Number.isNaN(date.getTime())) return [];\n\n  const today = new Date();\n  const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());\n  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());\n  const diffDays = Math.round((target - startToday) / 86400000);\n\n  const parts = [\n    target.toLocaleDateString('es-ES'),\n    `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${String(target.getDate()).padStart(2, '0')}`,\n    String(target.getFullYear()),\n    String(target.getDate()),\n  ];\n\n  if (diffDays === 0) parts.push('hoy');\n  if (diffDays === 1) parts.push('mañana', 'manana');\n  if (diffDays === -1) parts.push('ayer');\n  if (diffDays >= 0 && diffDays <= 7) parts.push('esta semana');\n  if (diffDays > 7 && diffDays <= 31) parts.push('este mes');\n\n  return parts.map(normalize).filter(Boolean);\n}\n\nfunction cardSearchHaystack(card) {\n  const labels = Array.isArray(card.labels)\n    ? card.labels.map(label => `${normalize(label.name || '')} ${normalize(label.color || '')}`).join(' ')\n    : '';\n  const dueTerms = getDateKeywords(card.due).join(' ');\n  const basic = `${normalize(card.name)} ${normalize(card.desc || '')} ${normalize(card.listName || '')} ${labels} ${dueTerms}`;\n  return normalize(basic);\n}\n\nfunction filterByTokens(cardsToFilter, tokens) {\n  if (!tokens.length) return cardsToFilter;\n  return cardsToFilter\n    .map(card => {\n      const haystack = cardSearchHaystack(card);\n      const score = tokens.reduce((acc, token) => acc + (haystack.includes(token) ? 1 : 0), 0);\n      return { card, score };\n    })\n    .filter(item => item.score > 0)\n    .sort((a, b) => b.score - a.score || a.card.name.localeCompare(b.card.name))\n    .map(item => item.card);\n}\n\nfunction filterByLabels(cardsToFilter) {\n  const wantsLabels = /\\betiqueta\\b|\\betiquetas\\b/.test(q);\n  if (!wantsLabels) return cardsToFilter;\n\n  const tokens = extractSearchTokens();\n  if (!tokens.length) {\n    return cardsToFilter.filter(card => Array.isArray(card.labels) && card.labels.length > 0);\n  }\n\n  return cardsToFilter.filter(card => {\n    const labelText = Array.isArray(card.labels)\n      ? card.labels.map(label => `${normalize(label.name || '')} ${normalize(label.color || '')}`).join(' ')\n      : '';\n    return tokens.some(token => labelText.includes(token));\n  });\n}\n\nfunction filterByDates(cardsToFilter) {\n  const wantsToday = /\\bhoy\\b/.test(q);\n  const wantsTomorrow = /\\bmañana\\b|\\bmanana\\b/.test(q);\n  const wantsWeek = /\\besta semana\\b/.test(q);\n  const wantsMonth = /\\beste mes\\b/.test(q);\n  const wantsOverdue = /\\batrasad|\\bvencid/.test(q);\n  const wantsWithDate = /\\bcon fecha\\b|\\bfecha\\b|\\bfechas\\b|\\bvencimiento\\b|\\bvencen\\b|\\bvence\\b/.test(q);\n\n  if (!(wantsToday || wantsTomorrow || wantsWeek || wantsMonth || wantsOverdue || wantsWithDate)) {\n    return cardsToFilter;\n  }\n\n  const today = new Date();\n  const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());\n  const endWeek = new Date(startToday);\n  endWeek.setDate(endWeek.getDate() + 7);\n  const endMonth = new Date(startToday);\n  endMonth.setMonth(endMonth.getMonth() + 1);\n\n  return cardsToFilter.filter(card => {\n    if (!card.due) return false;\n    const due = new Date(card.due);\n    if (Number.isNaN(due.getTime())) return false;\n\n    const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());\n    const diffDays = Math.round((dueDay - startToday) / 86400000);\n\n    if (wantsToday) return diffDays === 0;\n    if (wantsTomorrow) return diffDays === 1;\n    if (wantsWeek) return dueDay >= startToday && dueDay <= endWeek;\n    if (wantsMonth) return dueDay >= startToday && dueDay <= endMonth;\n    if (wantsOverdue) return dueDay < startToday;\n    if (wantsWithDate) return true;\n    return true;\n  });\n}\n\nfunction getMemoryKey() {\n  return `${req.remoteJid || req.replyTarget}::${req.participant || 'grupo'}`;\n}\n\nfunction getStoredSearches() {\n  const store = $getWorkflowStaticData('global');\n  if (!store.cardSearches) {\n    store.cardSearches = {};\n  }\n  return store.cardSearches;\n}\n\nfunction saveSearchResults(results) {\n  const searches = getStoredSearches();\n  const key = getMemoryKey();\n  searches[key] = {\n    timestamp: Date.now(),\n    results: results.slice(0, 8).map(card => ({\n      id: card.id,\n      name: card.name,\n      listName: card.listName,\n      due: card.due || null,\n      desc: card.desc || '',\n      labels: Array.isArray(card.labels) ? card.labels : [],\n      shortUrl: card.shortUrl || '',\n      url: card.url || '',\n      closed: !!card.closed,\n    })),\n  };\n}\n\nfunction getSavedResultByIndex(index) {\n  const searches = getStoredSearches();\n  const key = getMemoryKey();\n  const memory = searches[key];\n\n  if (!memory || !Array.isArray(memory.results)) {\n    return { error: 'missing' };\n  }\n\n  const ageMs = Date.now() - Number(memory.timestamp || 0);\n  const maxAgeMs = 12 * 60 * 60 * 1000;\n  if (ageMs > maxAgeMs) {\n    delete searches[key];\n    return { error: 'expired' };\n  }\n\n  if (index < 1 || index > memory.results.length) {\n    return { error: 'out_of_range', total: memory.results.length };\n  }\n\n  return { card: memory.results[index - 1], total: memory.results.length };\n}\n\nfunction findNumberedFollowupIndex() {\n  const patterns = [\n    /\\b(?:abre|abrir|detalle|detalles|muestrame|muéstrame|ensename|enséñame|link|enlace|url|abreme|ábreme)\\s+(?:la|el)?\\s*(\\d{1,2})\\b/,\n    /\\b(?:la|el)\\s+(\\d{1,2})\\b/,\n    /^\\s*(\\d{1,2})\\s*$/\n  ];\n\n  for (const pattern of patterns) {\n    const match = q.match(pattern);\n    if (match) return Number(match[1]);\n  }\n  return null;\n}\n\nfunction buildHelpMessage() {\n  const whitelistLine = req.hasWhitelist\n    ? 'Solo responde a los usuarios incluidos en la lista blanca.'\n    : 'Ahora mismo responde a cualquier usuario del grupo autorizado.';\n\n  return [\n    'Comandos disponibles:',\n    '- tr tablero',\n    '- tr listas',\n    '- tr tarjetas de en progreso',\n    '- tr busca factura',\n    '- tr tarjetas con etiqueta urgente',\n    '- tr tarjetas que vencen hoy',\n    '- tr tarjetas en progreso con etiqueta urgente que vencen hoy',\n    '- tr abre la 2',\n    '',\n    'También puedes combinar filtros por lista + etiqueta + fecha.',\n    whitelistLine,\n  ].join('\\n');\n}\n\nfunction buildGuidedError() {\n  if (/\\betiqueta\\b|\\betiquetas\\b/.test(q) && /\\bfecha\\b|\\bfechas\\b|\\bhoy\\b|\\bmañana\\b|\\bmanana\\b|\\bsemana\\b|\\bmes\\b|\\bvence\\b|\\bvencen\\b/.test(q)) {\n    return 'No he encontrado resultados con esa combinación. Prueba algo como: tr tarjetas en progreso con etiqueta urgente que vencen hoy.';\n  }\n  if (/\\betiqueta\\b|\\betiquetas\\b/.test(q)) {\n    return 'No he encontrado resultados con esa etiqueta. Prueba algo como: tr tarjetas con etiqueta urgente.';\n  }\n  if (/\\bfecha\\b|\\bfechas\\b|\\bhoy\\b|\\bmañana\\b|\\bmanana\\b|\\bsemana\\b|\\bmes\\b|\\bvence\\b|\\bvencen\\b|\\batrasad|\\bvencid/.test(q)) {\n    return 'No he encontrado tarjetas para esa fecha. Prueba con: tr tarjetas que vencen hoy o tr tarjetas atrasadas.';\n  }\n  if (/\\blista\\b|\\blistas\\b|\\bprogreso\\b|\\bpendiente\\b|\\bhecho\\b|\\bfinalizado\\b/.test(q)) {\n    return 'No he encontrado esa lista o no hay tarjetas que coincidan. Prueba con: tr listas o tr tarjetas de en progreso.';\n  }\n  if (/\\bbusca\\b|\\btarjeta\\b|\\btarea\\b|\\bdetalle\\b/.test(q)) {\n    return 'No he encontrado esa tarjeta. Prueba con: tr busca [nombre de tarjeta].';\n  }\n  return 'No se puede realizar tu consulta en estos momentos. Prueba con tr ayuda para ver ejemplos.';\n}\n\nconst asksHelp = /^ayuda$|^help$|^comandos$|^que puedes hacer$|^qué puedes hacer$/.test(q) || /\\bayuda\\b|\\bcomandos\\b/.test(q);\nconst asksBoard = /\\b(tablero|board)\\b/.test(q);\nconst asksLists = /\\b(lista|listas|columnas|column)\\b/.test(q);\nconst asksCards = /\\b(tarjeta|tarjetas|card|cards|tarea|tareas|pendiente|pendientes|progreso|bloquead|finalizad|hech|terminad|detalle|detalles|etiqueta|etiquetas|fecha|fechas|vence|vencen)\\b/.test(q);\nconst asksCount = /\\b(cuantas|cuantos|cuántas|cuántos|numero|número|total|cuenta)\\b/.test(q);\nconst asksSummary = /\\b(resumen|estado|general|todo|todas|todas las|que hay|qué hay)\\b/.test(q);\nconst asksSpecificCard = /\\b(detalle|detalles|buscar|busca|encuentra|tarjeta|tarea|donde|dónde|esta|está|abre|abrir|link|enlace|url|lleva|llévame|enseña|enséñame)\\b/.test(q);\nconst asksLabels = /\\betiqueta\\b|\\betiquetas\\b/.test(q);\nconst asksDates = /\\bfecha\\b|\\bfechas\\b|\\bvence\\b|\\bvencen\\b|\\bvencimiento\\b|\\bhoy\\b|\\bmañana\\b|\\bmanana\\b|\\besta semana\\b|\\beste mes\\b|\\batrasad|\\bvencid/.test(q);\n\nlet output = '';\n\nif (!req.question) {\n  output = 'No se puede realizar tu consulta en estos momentos. Prueba con tr ayuda.';\n} else if (asksHelp) {\n  output = buildHelpMessage();\n} else {\n  const followupIndex = findNumberedFollowupIndex();\n\n  if (followupIndex !== null) {\n    const saved = getSavedResultByIndex(followupIndex);\n    if (saved.card) {\n      output = buildCardDetails(saved.card);\n    } else if (saved.error === 'missing') {\n      output = 'No tengo una búsqueda reciente guardada. Primero usa algo como tr busca [nombre de tarjeta] y luego dime tr abre la 2.';\n    } else if (saved.error === 'expired') {\n      output = 'La búsqueda anterior ha caducado. Vuelve a buscar la tarjeta y luego dime tr abre la 2.';\n    } else if (saved.error === 'out_of_range') {\n      output = `Solo tengo ${saved.total} resultado${saved.total === 1 ? '' : 's'} guardado${saved.total === 1 ? '' : 's'}.`;\n    }\n  } else if ((asksBoard || asksLists) && !asksCards) {\n    output = `El tablero se llama \"${boardName}\". Sus listas reales son: ${allLists.map(list => `\"${list.name}\"`).join(', ')}.`;\n  } else {\n    const matchedLists = detectMatchedLists();\n    const matchedListIds = new Set(matchedLists.map(list => list.id));\n\n    let workingCards = matchedLists.length\n      ? cards.filter(card => matchedListIds.has(card.idList))\n      : cards;\n\n    if (asksLabels) {\n      workingCards = filterByLabels(workingCards);\n    }\n\n    if (asksDates) {\n      workingCards = filterByDates(workingCards);\n    }\n\n    const tokens = extractSearchTokens();\n    if (tokens.length) {\n      const tokenFiltered = filterByTokens(workingCards, tokens);\n      if (tokenFiltered.length) {\n        workingCards = tokenFiltered;\n      }\n    }\n\n    workingCards = uniqueById(workingCards);\n\n    if (asksSpecificCard && tokens.length >= 1) {\n      if (workingCards.length === 1) {\n        output = buildCardDetails(workingCards[0]);\n      } else if (workingCards.length > 1) {\n        saveSearchResults(workingCards);\n        output = `He encontrado varias tarjetas que coinciden con tu búsqueda:\\n${numbered(workingCards.slice(0, 8).map(card => `${card.name} (${card.listName})`), 8)}\\n\\nAhora puedes decirme tr abre la 2, tr detalle de la 3 o tr enlace de la 1.`;\n      } else {\n        output = buildGuidedError();\n      }\n    } else if (asksLabels || asksDates) {\n      if (!workingCards.length) {\n        output = buildGuidedError();\n      } else if (asksCount) {\n        output = `He encontrado ${workingCards.length} tarjeta${workingCards.length === 1 ? '' : 's'} que coinciden con tu consulta en \"${boardName}\".`;\n      } else {\n        output = `He encontrado ${workingCards.length} tarjeta${workingCards.length === 1 ? '' : 's'} en \"${boardName}\":\\n${bullets(workingCards.map(formatCard), 15)}`;\n      }\n    } else if (matchedLists.length > 0 || asksCards || asksCount || asksSummary) {\n      if (matchedLists.length === 1 && !asksLabels && !asksDates && !tokens.length) {\n        const list = matchedLists[0];\n        const listCards = cardsByListId.get(list.id) || [];\n        if (asksCount) {\n          output = `En la lista \"${list.name}\" hay ${listCards.length} tarjeta${listCards.length === 1 ? '' : 's'}.`;\n        } else if (listCards.length === 0) {\n          output = `La lista \"${list.name}\" existe, pero ahora mismo no tiene tarjetas.`;\n        } else {\n          output = `En la lista \"${list.name}\" hay ${listCards.length} tarjeta${listCards.length === 1 ? '' : 's'}:\\n${bullets(listCards.map(formatCard), 15)}`;\n        }\n      } else if (matchedLists.length > 1 && !asksLabels && !asksDates && !tokens.length && (asksCount || asksSummary)) {\n        const summaryLines = matchedLists.map(list => {\n          const count = (cardsByListId.get(list.id) || []).length;\n          return `${list.name}: ${count}`;\n        });\n        output = `Resumen real del tablero \"${boardName}\":\\n${bullets(summaryLines, 20)}`;\n      } else if (workingCards.length) {\n        if (asksCount) {\n          output = `He encontrado ${workingCards.length} tarjeta${workingCards.length === 1 ? '' : 's'} que coinciden con tu consulta en \"${boardName}\".`;\n        } else {\n          output = `He encontrado ${workingCards.length} tarjeta${workingCards.length === 1 ? '' : 's'} en \"${boardName}\":\\n${bullets(workingCards.map(formatCard), 15)}`;\n        }\n      } else {\n        output = buildGuidedError();\n      }\n    } else {\n      output = buildGuidedError();\n    }\n  }\n}\n\nreturn [\n  {\n    json: {\n      number: req.replyTarget,\n      output,\n      boardName,\n      totalLists: allLists.length,\n      totalCards,\n      shouldSend: true,\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        192
+      ],
+      "id": "15dd401f-209f-47d6-ac0d-fa1cd99c0108",
+      "name": "Construir respuesta"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.0.119:8282/message/sendText/ADDO%20v2",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $json.number }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.output }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        896,
+        192
+      ],
+      "id": "5123e44f-e9c9-4f25-ba94-ba2062aa5185",
+      "name": "HTTP Request",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "0BTcqdurbeIAvpvG",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const r = $json;\n\n// Recuperamos datos del evento de MinIO para poder mover luego el PDF original\nlet minioEvent = {};\ntry {\n  minioEvent = $('Code - Extraer evento MinIO').first().json || {};\n} catch (error) {\n  minioEvent = {};\n}\n\nconst originalKey = minioEvent.original_key || r.original_key || null;\nconst originalBucket = minioEvent.bucket || r.original_bucket || 'preflight-pdf';\n\nfunction esc(value) {\n  return String(value ?? '')\n    .replaceAll('&', '&amp;')\n    .replaceAll('<', '&lt;')\n    .replaceAll('>', '&gt;')\n    .replaceAll('\"', '&quot;');\n}\n\nfunction boolText(value) {\n  if (value === true) return 'Sí';\n  if (value === false) return 'No';\n  return 'No detectado';\n}\n\nfunction formatBox(box) {\n  if (!box) return 'No detectado';\n\n  const width = box.width_mm ?? 'N/D';\n  const height = box.height_mm ?? 'N/D';\n\n  return `${width} x ${height} mm`;\n}\n\nfunction boxDescription(name) {\n  const descriptions = {\n    MediaBox:\n      'Define el tamaño total físico de la página PDF. Suele ser el área más grande del documento.',\n    CropBox:\n      'Define el límite para el contenido de una página cuando se muestra o imprime.',\n    ArtBox:\n      'Define el contenido significativo de la página, incluido el espacio en blanco.',\n    TrimBox:\n      'Define las dimensiones finales de la página después del recorte.',\n    BleedBox:\n      'Define la ruta de recorte cuando la página se imprime profesionalmente para permitir el recorte y plegado del papel. Las marcas de impresión pueden quedar fuera del área de sangrado.',\n  };\n\n  return descriptions[name] || 'Sin descripción.';\n}\n\nconst filename = r.filename || minioEvent.filename || 'documento.pdf';\nconst baseName = filename.replace(/\\.pdf$/i, '');\n\nconst status = r.result?.status || r.status || 'DESCONOCIDO';\nconst issues = r.result?.issues || r.issues || [];\n\nconst pages = r.pdfinfo?.pages ?? 'No detectado';\nconst encrypted = r.pdfinfo?.encrypted ?? 'No detectado';\n\n// Cajas PDF\nconst boxes = r.pdfinfo?.boxes || {};\n\nconst mediaBox = boxes.MediaBox || null;\nconst cropBox = boxes.CropBox || null;\nconst bleedBox = boxes.BleedBox || null;\nconst trimBox = boxes.TrimBox || null;\nconst artBox = boxes.ArtBox || null;\n\n// Tamaño principal en milímetros\nconst pageSize = r.pdfinfo?.page_size_mm || {};\n\nconst pageWidth = pageSize.width ?? trimBox?.width_mm ?? mediaBox?.width_mm ?? null;\nconst pageHeight = pageSize.height ?? trimBox?.height_mm ?? mediaBox?.height_mm ?? null;\n\nlet pageSizeSource = pageSize.source || null;\n\nif (!pageSizeSource) {\n  if (trimBox) {\n    pageSizeSource = 'TrimBox';\n  } else if (mediaBox) {\n    pageSizeSource = 'MediaBox';\n  } else {\n    pageSizeSource = 'No detectado';\n  }\n}\n\n// Sangre\nconst bleed = r.bleed || {};\nconst bleedDeclared = bleed.bleed_declared;\nconst bleedEstimated = bleed.bleed_estimated_mm ?? 0;\nconst bleedMm = bleed.bleed_mm || {};\n\n// Color / ICC\nconst colorProfile = r.color_profile || {};\nconst profileDescription = colorProfile.profile_description || 'No detectado';\nconst profileType = colorProfile.profile_type || 'No detectado';\n\n// Cobertura de tinta\nconst ink = r.ink_coverage || {};\nconst inkPages = ink.pages || [];\nconst highInkPages = ink.high_total_ink_pages_over_300 || [];\n\nconst firstInkPage = inkPages[0] || {};\n\nconst c = firstInkPage.c != null ? Math.round(firstInkPage.c * 10000) / 100 : null;\nconst m = firstInkPage.m != null ? Math.round(firstInkPage.m * 10000) / 100 : null;\nconst y = firstInkPage.y != null ? Math.round(firstInkPage.y * 10000) / 100 : null;\nconst k = firstInkPage.k != null ? Math.round(firstInkPage.k * 10000) / 100 : null;\n\nconst totalInk = firstInkPage.total_ink_percent_estimated ?? null;\n\nconst issuesHtml = issues.length\n  ? issues.map(issue => `<li>${esc(issue)}</li>`).join('\\n')\n  : '<li>No se han detectado incidencias según las reglas actuales.</li>';\n\nconst statusClass = status === 'OK' ? 'ok' : status === 'ERROR' ? 'error' : 'review';\n\nconst html = `<!doctype html>\n<html lang=\"es\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>Informe Preflight - ${esc(filename)}</title>\n  <style>\n    body {\n      font-family: Arial, sans-serif;\n      color: #222;\n      line-height: 1.45;\n      margin: 32px;\n    }\n\n    h1, h2 {\n      margin-bottom: 8px;\n    }\n\n    .status {\n      display: inline-block;\n      padding: 8px 14px;\n      border-radius: 6px;\n      font-weight: bold;\n      color: white;\n    }\n\n    .ok {\n      background: #198754;\n    }\n\n    .review {\n      background: #d97706;\n    }\n\n    .error {\n      background: #dc2626;\n    }\n\n    table {\n      border-collapse: collapse;\n      width: 100%;\n      margin: 12px 0 24px;\n    }\n\n    th, td {\n      border: 1px solid #ddd;\n      padding: 8px 10px;\n      text-align: left;\n      vertical-align: top;\n    }\n\n    th {\n      background: #f3f3f3;\n      width: 32%;\n    }\n\n    .small {\n      color: #666;\n      font-size: 12px;\n    }\n\n    .note {\n      color: #555;\n      font-size: 13px;\n    }\n  </style>\n</head>\n<body>\n  <h1>Informe Preflight PDF</h1>\n\n  <p><strong>Archivo:</strong> ${esc(filename)}</p>\n  <p><strong>Estado:</strong> <span class=\"status ${statusClass}\">${esc(status)}</span></p>\n\n  <h2>Resumen</h2>\n  <table>\n    <tr>\n      <th>Páginas</th>\n      <td>${esc(pages)}</td>\n    </tr>\n    <tr>\n      <th>Tamaño final</th>\n      <td>${pageWidth && pageHeight ? `${esc(pageWidth)} x ${esc(pageHeight)} mm` : 'No detectado'}</td>\n    </tr>\n    <tr>\n      <th>Fuente del tamaño</th>\n      <td>${esc(pageSizeSource)}</td>\n    </tr>\n    <tr>\n      <th>PDF cifrado/protegido</th>\n      <td>${esc(encrypted)}</td>\n    </tr>\n  </table>\n\n  <h2>Cajas PDF / Áreas de página</h2>\n  <table>\n    <tr>\n      <th>Caja PDF</th>\n      <th>Medida detectada</th>\n      <th>Descripción</th>\n    </tr>\n    <tr>\n      <td><strong>MediaBox</strong></td>\n      <td>${esc(formatBox(mediaBox))}</td>\n      <td>${esc(boxDescription('MediaBox'))}</td>\n    </tr>\n    <tr>\n      <td><strong>CropBox</strong></td>\n      <td>${esc(formatBox(cropBox))}</td>\n      <td>${esc(boxDescription('CropBox'))}</td>\n    </tr>\n    <tr>\n      <td><strong>ArtBox</strong></td>\n      <td>${esc(formatBox(artBox))}</td>\n      <td>${esc(boxDescription('ArtBox'))}</td>\n    </tr>\n    <tr>\n      <td><strong>TrimBox</strong></td>\n      <td>${esc(formatBox(trimBox))}</td>\n      <td>${esc(boxDescription('TrimBox'))}</td>\n    </tr>\n    <tr>\n      <td><strong>BleedBox</strong></td>\n      <td>${esc(formatBox(bleedBox))}</td>\n      <td>${esc(boxDescription('BleedBox'))}</td>\n    </tr>\n  </table>\n\n  <h2>Sangre</h2>\n  <table>\n    <tr>\n      <th>Sangre declarada</th>\n      <td>${boolText(bleedDeclared)}</td>\n    </tr>\n    <tr>\n      <th>Sangre estimada</th>\n      <td>${esc(bleedEstimated)} mm</td>\n    </tr>\n    <tr>\n      <th>Izquierda</th>\n      <td>${esc(bleedMm.left ?? 0)} mm</td>\n    </tr>\n    <tr>\n      <th>Derecha</th>\n      <td>${esc(bleedMm.right ?? 0)} mm</td>\n    </tr>\n    <tr>\n      <th>Superior</th>\n      <td>${esc(bleedMm.top ?? 0)} mm</td>\n    </tr>\n    <tr>\n      <th>Inferior</th>\n      <td>${esc(bleedMm.bottom ?? 0)} mm</td>\n    </tr>\n  </table>\n\n  <h2>Color e ICC</h2>\n  <table>\n    <tr>\n      <th>Perfil ICC</th>\n      <td>${esc(profileDescription)}</td>\n    </tr>\n    <tr>\n      <th>Tipo de perfil</th>\n      <td>${esc(profileType)}</td>\n    </tr>\n    <tr>\n      <th>Parece RGB</th>\n      <td>${boolText(colorProfile.seems_rgb)}</td>\n    </tr>\n    <tr>\n      <th>Parece perfil de impresión</th>\n      <td>${boolText(colorProfile.seems_print_profile)}</td>\n    </tr>\n  </table>\n\n  <h2>Cobertura de tinta aproximada</h2>\n  <table>\n    <tr>\n      <th>C</th>\n      <td>${c != null ? `${esc(c)}%` : 'No detectado'}</td>\n    </tr>\n    <tr>\n      <th>M</th>\n      <td>${m != null ? `${esc(m)}%` : 'No detectado'}</td>\n    </tr>\n    <tr>\n      <th>Y</th>\n      <td>${y != null ? `${esc(y)}%` : 'No detectado'}</td>\n    </tr>\n    <tr>\n      <th>K</th>\n      <td>${k != null ? `${esc(k)}%` : 'No detectado'}</td>\n    </tr>\n    <tr>\n      <th>Total tinta estimado</th>\n      <td>${totalInk != null ? `${esc(totalInk)}%` : 'No detectado'}</td>\n    </tr>\n    <tr>\n      <th>Páginas sobre 300%</th>\n      <td>${highInkPages.length ? esc(highInkPages.join(', ')) : 'No detectadas'}</td>\n    </tr>\n  </table>\n\n  <h2>Incidencias</h2>\n  <ul>\n    ${issuesHtml}\n  </ul>\n\n  <p class=\"small\">\n    Informe generado automáticamente. Este análisis es orientativo y debe validarse con herramientas profesionales de preflight para producción crítica.\n  </p>\n</body>\n</html>`;\n\nconst reportJsonText = JSON.stringify(r, null, 2);\n\nreturn {\n  json: {\n    filename,\n    status,\n    issues,\n    pages,\n\n    original_key: originalKey,\n    original_bucket: originalBucket,\n\n    page_size_mm: {\n      width: pageWidth,\n      height: pageHeight,\n      source: pageSizeSource,\n    },\n\n    pdf_boxes: {\n      MediaBox: {\n        size_mm: formatBox(mediaBox),\n        description: boxDescription('MediaBox'),\n      },\n      CropBox: {\n        size_mm: formatBox(cropBox),\n        description: boxDescription('CropBox'),\n      },\n      ArtBox: {\n        size_mm: formatBox(artBox),\n        description: boxDescription('ArtBox'),\n      },\n      TrimBox: {\n        size_mm: formatBox(trimBox),\n        description: boxDescription('TrimBox'),\n      },\n      BleedBox: {\n        size_mm: formatBox(bleedBox),\n        description: boxDescription('BleedBox'),\n      },\n    },\n\n    bleed_declared: bleedDeclared,\n    bleed_estimated_mm: bleedEstimated,\n\n    icc_profile: profileDescription,\n    icc_profile_type: profileType,\n\n    report_html_filename: `${baseName}_preflight.html`,\n    report_json_filename: `${baseName}_preflight.json`,\n\n    report_html: html,\n    report_json: reportJsonText,\n\n    analysis: r,\n  },\n  binary: {\n    report_html: {\n      data: Buffer.from(html, 'utf8').toString('base64'),\n      mimeType: 'text/html',\n      fileName: `${baseName}_preflight.html`,\n    },\n    report_json: {\n      data: Buffer.from(reportJsonText, 'utf8').toString('base64'),\n      mimeType: 'application/json',\n      fileName: `${baseName}_preflight.json`,\n    },\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        768
+      ],
+      "id": "8c877499-e443-40a9-96ce-668734573e38",
+      "name": "Code - Preparar informe"
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "preflight-pdf",
+        "fileName": "=informes/{{ $json.report_html_filename }}",
+        "binaryPropertyName": "report_html",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        480
+      ],
+      "id": "e453b30d-5813-4fb0-a4db-1dc0dc41f4bd",
+      "name": "Upload HTML",
+      "credentials": {
+        "s3": {
+          "id": "qrOXGDUvBfFXf89d",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "preflight-pdf",
+        "fileName": "=informes/{{ $json.report_json_filename }}",
+        "binaryPropertyName": "report_json",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        672
+      ],
+      "id": "1e7f4344-30af-419a-a7c3-efc4a54500d7",
+      "name": "Upload JSON",
+      "credentials": {
+        "s3": {
+          "id": "qrOXGDUvBfFXf89d",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const informe = $('Code - Preparar informe').first().json;\nconst destino = $('Code - Preparar destino PDF').first().json;\n\nconst issues = informe.issues || [];\n\nconst issuesText = issues.length\n  ? issues.map(i => `- ${i}`).join('\\n')\n  : '- Sin incidencias detectadas según las reglas actuales.';\n\nconst htmlKey = `informes/${informe.report_html_filename}`;\nconst jsonKey = `informes/${informe.report_json_filename}`;\n\nconst whatsappMessage = `📄 Informe Preflight PDF\n\nArchivo: ${informe.filename}\nEstado: ${informe.status}\nPáginas: ${informe.pages}\nTamaño: ${informe.page_size_mm?.width ?? 'N/D'} x ${informe.page_size_mm?.height ?? 'N/D'} mm\nFuente tamaño: ${informe.page_size_mm?.source ?? 'N/D'}\n\nSangre declarada: ${informe.bleed_declared ? 'Sí' : 'No'}\nSangre estimada: ${informe.bleed_estimated_mm ?? 'N/D'} mm\n\nICC: ${informe.icc_profile}\nTipo ICC: ${informe.icc_profile_type}\n\nIncidencias:\n${issuesText}`;\n\nreturn {\n  json: {\n    status: 'preflight_completado',\n    filename: informe.filename,\n    preflight_status: informe.status,\n    pages: informe.pages,\n    page_size_mm: informe.page_size_mm,\n    bleed_declared: informe.bleed_declared,\n    bleed_estimated_mm: informe.bleed_estimated_mm,\n    icc_profile: informe.icc_profile,\n    icc_profile_type: informe.icc_profile_type,\n    issues,\n    minio: {\n      bucket: 'preflight-pdf',\n      html_key: htmlKey,\n      json_key: jsonKey,\n      moved_pdf_key: destino.destination_key,\n      original_key_deleted: destino.original_key,\n    },\n    whatsapp_message: whatsappMessage,\n    group_id: informe.analysis?.whatsapp?.group_id || informe.group_id || destino.group_id || null,\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2464,
+        768
+      ],
+      "id": "a52bc4b9-d409-4302-8bf3-dff6f04ba396",
+      "name": "Code - Preparar resumen"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const informe = $json;\n\nconst filename = informe.filename || 'documento.pdf';\nconst status = informe.status || 'ERROR';\nconst originalKey = informe.original_key;\n\nif (!originalKey) {\n  throw new Error('No se ha encontrado original_key. Revisa el nodo Code - Preparar informe.');\n}\n\nlet destinationFolder = 'error';\n\nif (status === 'OK') {\n  destinationFolder = 'ok';\n} else if (status === 'REVISAR') {\n  destinationFolder = 'revisar';\n} else {\n  destinationFolder = 'error';\n}\n\nreturn {\n  json: {\n    filename,\n    status,\n    original_key: originalKey,\n    destination_folder: destinationFolder,\n    destination_key: `${destinationFolder}/${filename}`,\n    bucket: informe.original_bucket || 'preflight-pdf',\n    group_id: informe.analysis?.whatsapp?.group_id || informe.group_id || null,\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        864
+      ],
+      "id": "828cf273-dc92-44af-bc0f-3af04b7e5f9f",
+      "name": "Code - Preparar destino PDF"
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "bucketName": "preflight-pdf",
+        "fileKey": "={{ $(\"Code - Preparar destino PDF\").first().json.original_key }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        2016,
+        864
+      ],
+      "id": "db0f8ca0-e08d-4875-90f9-d531f90d3031",
+      "name": "S3 - Borrar PDF de entrada",
+      "credentials": {
+        "s3": {
+          "id": "qrOXGDUvBfFXf89d",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1568,
+        576
+      ],
+      "id": "fdb462fb-d52c-4470-8025-c13cb913833f",
+      "name": "Merge - Informes subidos"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2240,
+        768
+      ],
+      "id": "113c793a-6f9a-44b6-90b5-8bcaff143451",
+      "name": "Merge - Todo completado"
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "preflight-pdf",
+        "fileName": "={{ $(\"Code - Preparar destino PDF\").first().json.destination_key }}",
+        "binaryPropertyName": "pdf_original",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        1792,
+        864
+      ],
+      "id": "7afc9ce6-1558-44a6-87c6-b54a3a4a534e",
+      "name": "S3 - Subir PDF a destino",
+      "credentials": {
+        "s3": {
+          "id": "qrOXGDUvBfFXf89d",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "bucketName": "preflight-pdf",
+        "fileKey": "={{ $json.original_key }}",
+        "binaryPropertyName": "pdf_original"
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        864
+      ],
+      "id": "204f2403-5c60-4ecf-a12d-f9a98c618f18",
+      "name": "S3 - Descargar PDF para mover",
+      "credentials": {
+        "s3": {
+          "id": "qrOXGDUvBfFXf89d",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.0.119:8282/message/sendText/ADDO%20v2",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    number: $json.group_id || $(\"Configuración\").first().json.allowedGroupJid,\n    text: $json.whatsapp_message\n  }\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2688,
+        768
+      ],
+      "id": "ec9fe222-000b-40fc-9346-8731e41a32eb",
+      "name": "HTTP Request - Enviar WhatsApp",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "0BTcqdurbeIAvpvG",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $(\"Webhook\").first().json;\nconst cfg = $(\"Configuración\").first().json;\n\nconst payload = raw.body || raw;\nconst data = payload.data || payload;\nconst key = data.key || data.message?.key || {};\n\nconst remoteJid = key.remoteJid || data.remoteJid || '';\nconst participant = key.participant || data.participant || '';\nconst fromMe = key.fromMe === true;\nconst messageId = key.id || data.id || '';\nconst message = data.message || {};\n\nconst allowedGroupJid = cfg.allowedGroupJid || 'REEMPLAZAR_POR_TU_GRUPO@g.us';\nconst allowedParticipantsCsv = cfg.allowedParticipantsCsv || '';\n\nconst allowedParticipants = String(allowedParticipantsCsv)\n  .split(/[,;\\n]/)\n  .map(item => item.trim())\n  .filter(Boolean);\n\nconst hasWhitelist = allowedParticipants.length > 0 &&\n  !allowedParticipants.some(item => item.startsWith('REEMPLAZAR_'));\n\nconst normalizedAllowedParticipants = allowedParticipants.map(item => item.toLowerCase());\nconst normalizedParticipant = String(participant || '').toLowerCase();\n\nfunction sanitizeFilename(name) {\n  return String(name || 'documento.pdf')\n    .replace(/[\\\\/:*?\"<>|]/g, '_')\n    .replace(/\\s+/g, '_')\n    .trim();\n}\n\nfunction findDocumentMessage(message) {\n  if (!message || typeof message !== 'object') return null;\n  if (message.documentMessage) return message.documentMessage;\n  if (message.documentWithCaptionMessage?.message?.documentMessage) return message.documentWithCaptionMessage.message.documentMessage;\n  if (message.viewOnceMessage?.message?.documentMessage) return message.viewOnceMessage.message.documentMessage;\n  if (message.ephemeralMessage?.message?.documentMessage) return message.ephemeralMessage.message.documentMessage;\n  if (message.ephemeralMessage?.message?.documentWithCaptionMessage?.message?.documentMessage) {\n    return message.ephemeralMessage.message.documentWithCaptionMessage.message.documentMessage;\n  }\n  return null;\n}\n\nconst documentMessage = findDocumentMessage(message);\n\nconst mimeType =\n  documentMessage?.mimetype ||\n  documentMessage?.mimeType ||\n  data.mimetype ||\n  data.mimeType ||\n  '';\n\nconst originalFilename =\n  documentMessage?.fileName ||\n  documentMessage?.title ||\n  data.fileName ||\n  data.filename ||\n  `whatsapp_${messageId}.pdf`;\n\nconst isCorrectGroup = remoteJid === allowedGroupJid;\nconst isAllowedParticipant = !hasWhitelist || normalizedAllowedParticipants.includes(normalizedParticipant);\n\nconst isPdf =\n  String(mimeType).toLowerCase().includes('pdf') ||\n  String(originalFilename).toLowerCase().endsWith('.pdf');\n\nconst hasUsableKey = !!(key && key.id && key.remoteJid);\n\nif (!isCorrectGroup || !isAllowedParticipant || !isPdf || !messageId || !hasUsableKey) {\n  return [];\n}\n\nconst filename = sanitizeFilename(originalFilename);\nconst originalKey = `entrada-whatsapp/${filename}`;\n\nreturn [\n  {\n    json: {\n      instance: payload.instance || 'ADDO v2',\n      group_id: remoteJid,\n      participant,\n      message_id: messageId,\n      message_key: key,\n      filename,\n      base_name: filename.replace(/\\.pdf$/i, ''),\n      mime_type: mimeType || 'application/pdf',\n      original_key: originalKey,\n      original_bucket: 'preflight-pdf',\n      from_me: fromMe,\n      push_name: data.pushName || null,\n      raw_event: payload,\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        768
+      ],
+      "id": "7e74b163-5164-4607-810c-4568b27664a3",
+      "name": "Code - Filtrar grupo y PDF"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const meta = $('Code - Filtrar grupo y PDF').first().json;\nconst response = $json;\n\nfunction findBase64(obj) {\n  if (!obj || typeof obj !== 'object') return null;\n\n  for (const [key, value] of Object.entries(obj)) {\n    if (typeof value === 'string') {\n      const clean = value.replace(/^data:.*?;base64,/, '');\n\n      const keyLooksRight = key.toLowerCase().includes('base64');\n      const valueLooksRight =\n        value.startsWith('data:application/pdf;base64,') ||\n        (clean.length > 500 && /^[A-Za-z0-9+/=\\r\\n]+$/.test(clean));\n\n      if (keyLooksRight || valueLooksRight) {\n        return clean;\n      }\n    }\n\n    if (value && typeof value === 'object') {\n      const found = findBase64(value);\n      if (found) return found;\n    }\n  }\n\n  return null;\n}\n\nlet base64 =\n  response.base64 ||\n  response.data?.base64 ||\n  response.response?.base64 ||\n  response.media?.base64 ||\n  findBase64(response);\n\nif (!base64) {\n  throw new Error('No se encontró contenido Base64 del PDF en la respuesta de Evolution.');\n}\n\nbase64 = String(base64).replace(/^data:.*?;base64,/, '').replace(/\\s/g, '');\n\nreturn {\n  json: {\n    filename: meta.filename,\n    base_name: meta.base_name,\n    original_key: meta.original_key,\n    original_bucket: meta.original_bucket,\n    group_id: meta.group_id,\n    message_id: meta.message_id,\n    mime_type: 'application/pdf',\n  },\n  binary: {\n    file: {\n      data: base64,\n      mimeType: 'application/pdf',\n      fileName: meta.filename,\n    },\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        768
+      ],
+      "id": "2a35476e-07b6-47ef-8957-d03da146effd",
+      "name": "Code - Convertir Base64 a PDF"
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "preflight-pdf",
+        "fileName": "={{ $json.original_key }}",
+        "binaryPropertyName": "file",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        224,
+        768
+      ],
+      "id": "6acab53e-46f6-4d8c-845b-8ca48364e0dd",
+      "name": "S3 - Guardar PDF WhatsApp",
+      "credentials": {
+        "s3": {
+          "id": "qrOXGDUvBfFXf89d",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "bucketName": "preflight-pdf",
+        "fileKey": "={{ $(\"Code - Convertir Base64 a PDF\").first().json.original_key }}",
+        "binaryPropertyName": "file"
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        448,
+        768
+      ],
+      "id": "242575cc-b890-4d26-99a9-d0794ade0f12",
+      "name": "S3 - Descargar PDF WhatsApp",
+      "credentials": {
+        "s3": {
+          "id": "qrOXGDUvBfFXf89d",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.0.119:8001/analyze",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "file"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4ae2c055-ab8c-4d0d-8684-a253daaffee2",
+      "name": "HTTP Request - Analizar PDF1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        768
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "XTn3BIG8CuCeF42M",
+          "name": "PDF_API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const analysis = $json;\nconst meta = $('Code - Convertir Base64 a PDF').first().json;\n\nanalysis.filename = meta.filename;\nanalysis.original_key = meta.original_key;\nanalysis.original_bucket = meta.original_bucket;\nanalysis.source = 'whatsapp';\nanalysis.whatsapp = {\n  group_id: meta.group_id,\n  message_id: meta.message_id,\n};\n\nreturn {\n  json: analysis,\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        768
+      ],
+      "id": "e3b956e4-ca16-4bfe-bdd8-033212ce1b53",
+      "name": "Code - Inyectar metadata WhatsApp"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.0.119:8282/chat/getBase64FromMediaMessage/ADDO%20v2",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    message: {\n      key: $json.message_key\n    },\n    convertToMp4: false\n  }\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -224,
+        768
+      ],
+      "id": "0cf6bb84-b0ff-4f54-8cd5-b467594968c0",
+      "name": "HTTP Request - Obtener PDF Base64",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "0BTcqdurbeIAvpvG",
+          "name": "Header Auth account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar entrada": {
+      "main": [
+        [
+          {
+            "node": "¿Procesar mensaje?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trello: listas del tablero": {
+      "main": [
+        [
+          {
+            "node": "Preparar listas para tarjetas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar listas para tarjetas": {
+      "main": [
+        [
+          {
+            "node": "Trello: tarjetas de listas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trello: tarjetas de listas": {
+      "main": [
+        [
+          {
+            "node": "Construir respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construir respuesta": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Procesar mensaje?": {
+      "main": [
+        [
+          {
+            "node": "Trello: tablero",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Trello: listas del tablero",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "¿Avisar uso /tr?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aviso usar /tr": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Avisar uso /tr?": {
+      "main": [
+        [
+          {
+            "node": "Aviso usar /tr",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignorar mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configuración": {
+      "main": [
+        [
+          {
+            "node": "Normalizar entrada",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code - Filtrar grupo y PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Preparar informe": {
+      "main": [
+        [
+          {
+            "node": "Upload HTML",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Upload JSON",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code - Preparar destino PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload HTML": {
+      "main": [
+        [
+          {
+            "node": "Merge - Informes subidos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload JSON": {
+      "main": [
+        [
+          {
+            "node": "Merge - Informes subidos",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Code - Preparar resumen": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Enviar WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Preparar destino PDF": {
+      "main": [
+        [
+          {
+            "node": "S3 - Descargar PDF para mover",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge - Informes subidos": {
+      "main": [
+        [
+          {
+            "node": "Merge - Todo completado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S3 - Borrar PDF de entrada": {
+      "main": [
+        [
+          {
+            "node": "Merge - Todo completado",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge - Todo completado": {
+      "main": [
+        [
+          {
+            "node": "Code - Preparar resumen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S3 - Subir PDF a destino": {
+      "main": [
+        [
+          {
+            "node": "S3 - Borrar PDF de entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S3 - Descargar PDF para mover": {
+      "main": [
+        [
+          {
+            "node": "S3 - Subir PDF a destino",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Filtrar grupo y PDF": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Obtener PDF Base64",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Convertir Base64 a PDF": {
+      "main": [
+        [
+          {
+            "node": "S3 - Guardar PDF WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S3 - Guardar PDF WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "S3 - Descargar PDF WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S3 - Descargar PDF WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Analizar PDF1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - Analizar PDF1": {
+      "main": [
+        [
+          {
+            "node": "Code - Inyectar metadata WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Inyectar metadata WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Code - Preparar informe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - Obtener PDF Base64": {
+      "main": [
+        [
+          {
+            "node": "Code - Convertir Base64 a PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "UslOMwwiH98sBT9V",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "be922264-c15d-48c0-8c71-70ff83b3dc90",
+  "activeVersionId": "be922264-c15d-48c0-8c71-70ff83b3dc90",
+  "versionCounter": 45,
+  "triggerCount": 1,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-05-08T07:37:44.297Z",
+      "createdAt": "2026-05-08T07:37:44.297Z",
+      "role": "workflow:owner",
+      "workflowId": "mrRE7EY0byzx6ZW3",
+      "projectId": "Oydmi9LKo6hnXrnp",
+      "project": {
+        "updatedAt": "2026-04-20T15:31:20.051Z",
+        "createdAt": "2026-04-20T15:12:06.805Z",
+        "id": "Oydmi9LKo6hnXrnp",
+        "name": "Ximo Soler <grafico@addoimpresores.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "3068be6c-0e51-439e-8bf9-e72776c398e1"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": "Version be922264",
+    "description": ""
+  }
+}

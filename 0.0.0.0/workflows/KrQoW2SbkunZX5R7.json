@@ -1,0 +1,647 @@
+{
+  "updatedAt": "2026-05-04T10:56:41.854Z",
+  "createdAt": "2026-04-30T16:20:45.428Z",
+  "id": "KrQoW2SbkunZX5R7",
+  "name": "PDF Preflight - Whatsapp Entrada",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const r = $json;\n\n// Recuperamos datos del evento anterior para poder mover luego el PDF original\nlet previousEvent = {};\ntry {\n  previousEvent = $('Code - Extraer evento MinIO').first().json || {};\n} catch (error) {\n  try {\n    previousEvent = $('Code - Convertir Base64 a PDF').first().json || {};\n  } catch (error2) {\n    previousEvent = {};\n  }\n}\n\nconst originalKey = previousEvent.original_key || r.original_key || null;\nconst originalBucket = previousEvent.bucket || previousEvent.original_bucket || r.original_bucket || 'preflight-pdf';\n\nfunction esc(value) {\n  return String(value ?? '')\n    .replaceAll('&', '&amp;')\n    .replaceAll('<', '&lt;')\n    .replaceAll('>', '&gt;')\n    .replaceAll('\"', '&quot;');\n}\n\nfunction boolText(value) {\n  if (value === true) return 'Sí';\n  if (value === false) return 'No';\n  return 'No detectado';\n}\n\nfunction formatBox(box) {\n  if (!box) return 'No detectado';\n\n  const width = box.width_mm ?? 'N/D';\n  const height = box.height_mm ?? 'N/D';\n\n  return `${width} x ${height} mm`;\n}\n\nfunction boxDescription(name) {\n  const descriptions = {\n    MediaBox:\n      'Define el tamaño total físico de la página PDF. Suele ser el área más grande del documento.',\n    CropBox:\n      'Define el límite para el contenido de una página cuando se muestra o imprime.',\n    ArtBox:\n      'Define el contenido significativo de la página, incluido el espacio en blanco.',\n    TrimBox:\n      'Define las dimensiones finales de la página después del recorte.',\n    BleedBox:\n      'Define la ruta de recorte cuando la página se imprime profesionalmente para permitir el recorte y plegado del papel. Las marcas de impresión pueden quedar fuera del área de sangrado.',\n  };\n\n  return descriptions[name] || 'Sin descripción.';\n}\n\nconst filename = r.filename || previousEvent.filename || 'documento.pdf';\nconst baseName = filename.replace(/\\.pdf$/i, '');\n\nconst status = r.result?.status || r.status || 'DESCONOCIDO';\nconst issues = r.result?.issues || r.issues || [];\n\nconst pages = r.pdfinfo?.pages ?? 'No detectado';\nconst encrypted = r.pdfinfo?.encrypted ?? 'No detectado';\n\n// Cajas PDF\nconst boxes = r.pdfinfo?.boxes || {};\n\nconst mediaBox = boxes.MediaBox || null;\nconst cropBox = boxes.CropBox || null;\nconst bleedBox = boxes.BleedBox || null;\nconst trimBox = boxes.TrimBox || null;\nconst artBox = boxes.ArtBox || null;\n\n// Tamaño principal en milímetros\nconst pageSize = r.pdfinfo?.page_size_mm || {};\n\nconst pageWidth = pageSize.width ?? trimBox?.width_mm ?? mediaBox?.width_mm ?? null;\nconst pageHeight = pageSize.height ?? trimBox?.height_mm ?? mediaBox?.height_mm ?? null;\n\nlet pageSizeSource = pageSize.source || null;\n\nif (!pageSizeSource) {\n  if (trimBox) {\n    pageSizeSource = 'TrimBox';\n  } else if (mediaBox) {\n    pageSizeSource = 'MediaBox';\n  } else {\n    pageSizeSource = 'No detectado';\n  }\n}\n\n// Sangre\nconst bleed = r.bleed || {};\nconst bleedDeclared = bleed.bleed_declared;\nconst bleedEstimated = bleed.bleed_estimated_mm ?? 0;\nconst bleedMm = bleed.bleed_mm || {};\n\n// Color / ICC\nconst colorProfile = r.color_profile || {};\nconst profileDescription = colorProfile.profile_description || 'No detectado';\nconst profileType = colorProfile.profile_type || 'No detectado';\n\n// Tintas planas / Pantone\nconst spotColors = r.spot_colors || {};\nconst hasSpotColors = spotColors.has_spot_colors === true;\nconst spotColorList = spotColors.spot_colors || [];\nconst spotColorCount = spotColors.spot_color_count ?? spotColorList.length;\nconst hasRegistrationColor = spotColors.has_registration_color === true;\nconst registrationColors = spotColors.registration_colors || [];\n\n// Cobertura de tinta\nconst ink = r.ink_coverage || {};\nconst inkPages = ink.pages || [];\nconst highInkPages = ink.high_total_ink_pages_over_300 || [];\n\nconst firstInkPage = inkPages[0] || {};\n\nconst c = firstInkPage.c != null ? Math.round(firstInkPage.c * 10000) / 100 : null;\nconst m = firstInkPage.m != null ? Math.round(firstInkPage.m * 10000) / 100 : null;\nconst y = firstInkPage.y != null ? Math.round(firstInkPage.y * 10000) / 100 : null;\nconst k = firstInkPage.k != null ? Math.round(firstInkPage.k * 10000) / 100 : null;\n\nconst totalInk = firstInkPage.total_ink_percent_estimated ?? null;\n\nconst issuesHtml = issues.length\n  ? issues.map(issue => `<li>${esc(issue)}</li>`).join('\\n')\n  : '<li>No se han detectado incidencias según las reglas actuales.</li>';\n\nconst spotColorsHtml = hasSpotColors\n  ? spotColorList.map(color => `<li>${esc(color)}</li>`).join('\\n')\n  : '<li>No se han detectado tintas planas.</li>';\n\nconst registrationHtml = hasRegistrationColor\n  ? registrationColors.map(color => `<li>${esc(color)}</li>`).join('\\n')\n  : '<li>No se ha detectado color de registro.</li>';\n\nconst statusClass = status === 'OK' ? 'ok' : status === 'ERROR' ? 'error' : 'review';\n\nconst html = `<!doctype html>\n<html lang=\"es\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>Informe Preflight - ${esc(filename)}</title>\n  <style>\n    body {\n      font-family: Arial, sans-serif;\n      color: #222;\n      line-height: 1.45;\n      margin: 32px;\n    }\n\n    h1, h2 {\n      margin-bottom: 8px;\n    }\n\n    .status {\n      display: inline-block;\n      padding: 8px 14px;\n      border-radius: 6px;\n      font-weight: bold;\n      color: white;\n    }\n\n    .ok {\n      background: #198754;\n    }\n\n    .review {\n      background: #d97706;\n    }\n\n    .error {\n      background: #dc2626;\n    }\n\n    table {\n      border-collapse: collapse;\n      width: 100%;\n      margin: 12px 0 24px;\n    }\n\n    th, td {\n      border: 1px solid #ddd;\n      padding: 8px 10px;\n      text-align: left;\n      vertical-align: top;\n    }\n\n    th {\n      background: #f3f3f3;\n      width: 32%;\n    }\n\n    .small {\n      color: #666;\n      font-size: 12px;\n    }\n\n    .warning {\n      color: #b45309;\n      font-weight: bold;\n    }\n  </style>\n</head>\n<body>\n  <h1>Informe Preflight PDF</h1>\n\n  <p><strong>Archivo:</strong> ${esc(filename)}</p>\n  <p><strong>Estado:</strong> <span class=\"status ${statusClass}\">${esc(status)}</span></p>\n\n  <h2>Resumen</h2>\n  <table>\n    <tr>\n      <th>Páginas</th>\n      <td>${esc(pages)}</td>\n    </tr>\n    <tr>\n      <th>Tamaño final</th>\n      <td>${pageWidth && pageHeight ? `${esc(pageWidth)} x ${esc(pageHeight)} mm` : 'No detectado'}</td>\n    </tr>\n    <tr>\n      <th>Fuente del tamaño</th>\n      <td>${esc(pageSizeSource)}</td>\n    </tr>\n    <tr>\n      <th>PDF cifrado/protegido</th>\n      <td>${esc(encrypted)}</td>\n    </tr>\n  </table>\n\n  <h2>Cajas PDF / Áreas de página</h2>\n  <table>\n    <tr>\n      <th>Caja PDF</th>\n      <th>Medida detectada</th>\n      <th>Descripción</th>\n    </tr>\n    <tr>\n      <td><strong>MediaBox</strong></td>\n      <td>${esc(formatBox(mediaBox))}</td>\n      <td>${esc(boxDescription('MediaBox'))}</td>\n    </tr>\n    <tr>\n      <td><strong>CropBox</strong></td>\n      <td>${esc(formatBox(cropBox))}</td>\n      <td>${esc(boxDescription('CropBox'))}</td>\n    </tr>\n    <tr>\n      <td><strong>ArtBox</strong></td>\n      <td>${esc(formatBox(artBox))}</td>\n      <td>${esc(boxDescription('ArtBox'))}</td>\n    </tr>\n    <tr>\n      <td><strong>TrimBox</strong></td>\n      <td>${esc(formatBox(trimBox))}</td>\n      <td>${esc(boxDescription('TrimBox'))}</td>\n    </tr>\n    <tr>\n      <td><strong>BleedBox</strong></td>\n      <td>${esc(formatBox(bleedBox))}</td>\n      <td>${esc(boxDescription('BleedBox'))}</td>\n    </tr>\n  </table>\n\n  <h2>Sangre</h2>\n  <table>\n    <tr>\n      <th>Sangre declarada</th>\n      <td>${boolText(bleedDeclared)}</td>\n    </tr>\n    <tr>\n      <th>Sangre estimada</th>\n      <td>${esc(bleedEstimated)} mm</td>\n    </tr>\n    <tr>\n      <th>Izquierda</th>\n      <td>${esc(bleedMm.left ?? 0)} mm</td>\n    </tr>\n    <tr>\n      <th>Derecha</th>\n      <td>${esc(bleedMm.right ?? 0)} mm</td>\n    </tr>\n    <tr>\n      <th>Superior</th>\n      <td>${esc(bleedMm.top ?? 0)} mm</td>\n    </tr>\n    <tr>\n      <th>Inferior</th>\n      <td>${esc(bleedMm.bottom ?? 0)} mm</td>\n    </tr>\n  </table>\n\n  <h2>Color e ICC</h2>\n  <table>\n    <tr>\n      <th>Perfil ICC</th>\n      <td>${esc(profileDescription)}</td>\n    </tr>\n    <tr>\n      <th>Tipo de perfil</th>\n      <td>${esc(profileType)}</td>\n    </tr>\n    <tr>\n      <th>Parece RGB</th>\n      <td>${boolText(colorProfile.seems_rgb)}</td>\n    </tr>\n    <tr>\n      <th>Parece perfil de impresión</th>\n      <td>${boolText(colorProfile.seems_print_profile)}</td>\n    </tr>\n  </table>\n\n  <h2>Tintas planas / Pantone</h2>\n  <table>\n    <tr>\n      <th>Tintas planas detectadas</th>\n      <td>${boolText(hasSpotColors)}</td>\n    </tr>\n    <tr>\n      <th>Número de tintas planas</th>\n      <td>${esc(spotColorCount)}</td>\n    </tr>\n    <tr>\n      <th>Listado</th>\n      <td>\n        <ul>\n          ${spotColorsHtml}\n        </ul>\n      </td>\n    </tr>\n    <tr>\n      <th>Color de registro</th>\n      <td>${boolText(hasRegistrationColor)}</td>\n    </tr>\n    <tr>\n      <th>Registro detectado</th>\n      <td>\n        <ul>\n          ${registrationHtml}\n        </ul>\n      </td>\n    </tr>\n  </table>\n\n  <h2>Cobertura de tinta aproximada</h2>\n  <table>\n    <tr>\n      <th>C</th>\n      <td>${c != null ? `${esc(c)}%` : 'No detectado'}</td>\n    </tr>\n    <tr>\n      <th>M</th>\n      <td>${m != null ? `${esc(m)}%` : 'No detectado'}</td>\n    </tr>\n    <tr>\n      <th>Y</th>\n      <td>${y != null ? `${esc(y)}%` : 'No detectado'}</td>\n    </tr>\n    <tr>\n      <th>K</th>\n      <td>${k != null ? `${esc(k)}%` : 'No detectado'}</td>\n    </tr>\n    <tr>\n      <th>Total tinta estimado</th>\n      <td>${totalInk != null ? `${esc(totalInk)}%` : 'No detectado'}</td>\n    </tr>\n    <tr>\n      <th>Páginas sobre 300%</th>\n      <td>${highInkPages.length ? esc(highInkPages.join(', ')) : 'No detectadas'}</td>\n    </tr>\n  </table>\n\n  <h2>Incidencias</h2>\n  <ul>\n    ${issuesHtml}\n  </ul>\n\n  <p class=\"small\">\n    Informe generado automáticamente. Este análisis es orientativo y debe validarse con herramientas profesionales de preflight para producción crítica.\n  </p>\n</body>\n</html>`;\n\nconst reportJsonText = JSON.stringify(r, null, 2);\n\nreturn {\n  json: {\n    filename,\n    status,\n    issues,\n    pages,\n\n    original_key: originalKey,\n    original_bucket: originalBucket,\n\n    page_size_mm: {\n      width: pageWidth,\n      height: pageHeight,\n      source: pageSizeSource,\n    },\n\n    pdf_boxes: {\n      MediaBox: {\n        size_mm: formatBox(mediaBox),\n        description: boxDescription('MediaBox'),\n      },\n      CropBox: {\n        size_mm: formatBox(cropBox),\n        description: boxDescription('CropBox'),\n      },\n      ArtBox: {\n        size_mm: formatBox(artBox),\n        description: boxDescription('ArtBox'),\n      },\n      TrimBox: {\n        size_mm: formatBox(trimBox),\n        description: boxDescription('TrimBox'),\n      },\n      BleedBox: {\n        size_mm: formatBox(bleedBox),\n        description: boxDescription('BleedBox'),\n      },\n    },\n\n    bleed_declared: bleedDeclared,\n    bleed_estimated_mm: bleedEstimated,\n\n    icc_profile: profileDescription,\n    icc_profile_type: profileType,\n\n    spot_colors: {\n      available: spotColors.available ?? false,\n      has_spot_colors: hasSpotColors,\n      spot_colors: spotColorList,\n      spot_color_count: spotColorCount,\n      has_registration_color: hasRegistrationColor,\n      registration_colors: registrationColors,\n    },\n\n    report_html_filename: `${baseName}_preflight.html`,\n    report_json_filename: `${baseName}_preflight.json`,\n\n    report_html: html,\n    report_json: reportJsonText,\n\n    analysis: r,\n  },\n  binary: {\n    report_html: {\n      data: Buffer.from(html, 'utf8').toString('base64'),\n      mimeType: 'text/html',\n      fileName: `${baseName}_preflight.html`,\n    },\n    report_json: {\n      data: Buffer.from(reportJsonText, 'utf8').toString('base64'),\n      mimeType: 'application/json',\n      fileName: `${baseName}_preflight.json`,\n    },\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        48
+      ],
+      "id": "60efffce-4b33-4bd5-9014-9b4e4cb0f4dc",
+      "name": "Code - Preparar informe"
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "preflight-pdf",
+        "fileName": "=informes/{{ $json.report_html_filename }}",
+        "binaryPropertyName": "report_html",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        1664,
+        -144
+      ],
+      "id": "f54cc239-02ff-4af2-b9f9-a78fd79b18af",
+      "name": "Upload HTML",
+      "credentials": {
+        "s3": {
+          "id": "qrOXGDUvBfFXf89d",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "preflight-pdf",
+        "fileName": "=informes/{{ $json.report_json_filename }}",
+        "binaryPropertyName": "report_json",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        1664,
+        48
+      ],
+      "id": "63393016-6e21-455a-bd2b-d2b0198bb830",
+      "name": "Upload JSON",
+      "credentials": {
+        "s3": {
+          "id": "qrOXGDUvBfFXf89d",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const informe = $('Code - Preparar informe').first().json;\nconst destino = $('Code - Preparar destino PDF').first().json;\n\nconst issues = informe.issues || [];\n\nconst issuesText = issues.length\n  ? issues.map(i => `- ${i}`).join('\\n')\n  : '- Sin incidencias detectadas según las reglas actuales.';\n\nconst htmlKey = `informes/${informe.report_html_filename}`;\nconst jsonKey = `informes/${informe.report_json_filename}`;\n\nconst spot = informe.spot_colors || {};\nconst hasSpotColors = spot.has_spot_colors === true;\nconst spotList = spot.spot_colors || [];\nconst spotCount = spot.spot_color_count ?? spotList.length;\n\nlet spotText = '';\n\nif (hasSpotColors) {\n  spotText = `\n\nTintas planas: Sí\nPantones / tintas: ${spotList.join(', ')}\nCantidad: ${spotCount}`;\n} else {\n  spotText = `\n\nTintas planas: No`;\n}\n\nif (spot.has_registration_color) {\n  spotText += `\n\n⚠ Color de registro detectado`;\n}\n\nconst whatsappMessage = `📄 Informe Preflight PDF\n\nArchivo: ${informe.filename}\nEstado: ${informe.status}\nPáginas: ${informe.pages}\nTamaño: ${informe.page_size_mm?.width ?? 'N/D'} x ${informe.page_size_mm?.height ?? 'N/D'} mm\nFuente tamaño: ${informe.page_size_mm?.source ?? 'N/D'}\n\nSangre declarada: ${informe.bleed_declared ? 'Sí' : 'No'}\nSangre estimada: ${informe.bleed_estimated_mm ?? 'N/D'} mm\n\nICC: ${informe.icc_profile}\nTipo ICC: ${informe.icc_profile_type}${spotText}\n\nIncidencias:\n${issuesText}`;\n\nreturn {\n  json: {\n    status: 'preflight_completado',\n    filename: informe.filename,\n    preflight_status: informe.status,\n    pages: informe.pages,\n    page_size_mm: informe.page_size_mm,\n    bleed_declared: informe.bleed_declared,\n    bleed_estimated_mm: informe.bleed_estimated_mm,\n    icc_profile: informe.icc_profile,\n    icc_profile_type: informe.icc_profile_type,\n    spot_colors: informe.spot_colors,\n    issues,\n    minio: {\n      bucket: 'preflight-pdf',\n      html_key: htmlKey,\n      json_key: jsonKey,\n      moved_pdf_key: destino.destination_key,\n      original_key_deleted: destino.original_key,\n    },\n    whatsapp_message: whatsappMessage,\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2784,
+        48
+      ],
+      "id": "bf596b1f-33d0-4f89-8f8d-44b6aaba8f80",
+      "name": "Code - Preparar resumen"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const informe = $json;\n\nconst filename = informe.filename || 'documento.pdf';\nconst status = informe.status || 'ERROR';\nconst originalKey = informe.original_key;\n\nif (!originalKey) {\n  throw new Error('No se ha encontrado original_key. Revisa el nodo Code - Preparar informe.');\n}\n\nlet destinationFolder = 'error';\n\nif (status === 'OK') {\n  destinationFolder = 'ok';\n} else if (status === 'REVISAR') {\n  destinationFolder = 'revisar';\n} else {\n  destinationFolder = 'error';\n}\n\nreturn {\n  json: {\n    filename,\n    status,\n    original_key: originalKey,\n    destination_folder: destinationFolder,\n    destination_key: `${destinationFolder}/${filename}`,\n    bucket: informe.original_bucket || 'preflight-pdf',\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1664,
+        240
+      ],
+      "id": "365706f6-c90d-47c1-bc78-4f0ac76ec4ca",
+      "name": "Code - Preparar destino PDF"
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "bucketName": "preflight-pdf",
+        "fileKey": "={{ $(\"Code - Preparar destino PDF\").first().json.original_key }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        2336,
+        240
+      ],
+      "id": "c7024181-921a-4bdd-9abf-a68d411f0e7b",
+      "name": "S3 - Borrar PDF de entrada",
+      "credentials": {
+        "s3": {
+          "id": "qrOXGDUvBfFXf89d",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1888,
+        -48
+      ],
+      "id": "8a4d6355-05ca-4667-9a55-3bac3f397ad2",
+      "name": "Merge - Informes subidos"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2560,
+        48
+      ],
+      "id": "a3448ce6-7535-46c5-9ac6-9f4307b64e39",
+      "name": "Merge - Todo completado"
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "preflight-pdf",
+        "fileName": "={{ $(\"Code - Preparar destino PDF\").first().json.destination_key }}",
+        "binaryPropertyName": "pdf_original",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        2112,
+        240
+      ],
+      "id": "6636c72d-c49e-4f17-a4a0-1cf57e891ef7",
+      "name": "S3 - Subir PDF a destino",
+      "credentials": {
+        "s3": {
+          "id": "qrOXGDUvBfFXf89d",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "bucketName": "preflight-pdf",
+        "fileKey": "={{ $json.original_key }}",
+        "binaryPropertyName": "pdf_original"
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        1888,
+        240
+      ],
+      "id": "f76612c2-0658-4424-bdd9-24cdded01dda",
+      "name": "S3 - Descargar PDF para mover",
+      "credentials": {
+        "s3": {
+          "id": "qrOXGDUvBfFXf89d",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.0.119:8282/message/sendText/ADDO%20v2",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    number: \"120363425302477785@g.us\",\n    text: $json.whatsapp_message\n  }\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3008,
+        48
+      ],
+      "id": "f01f0f28-4163-40e5-a4d9-cb380c5e06a4",
+      "name": "HTTP Request - Enviar WhatsApp",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "0BTcqdurbeIAvpvG",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "evolution-preflight-pdf",
+        "options": {
+          "responseCode": {
+            "values": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -352,
+        48
+      ],
+      "id": "c7ed273e-afb6-4a6a-9ae9-681f2bd37bcc",
+      "name": "Webhook - Evolution WhatsApp",
+      "webhookId": "f98a3b48-7ab6-473c-9a10-abfec3df7ce9"
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = [];\n\nconst GROUP_ID = '120363425302477785@g.us';\n\nfunction sanitizeFilename(name) {\n  return String(name || 'documento.pdf')\n    .replace(/[\\\\/:*?\"<>|]/g, '_')\n    .replace(/\\s+/g, '_')\n    .trim();\n}\n\nfunction findDocumentMessage(message) {\n  if (!message || typeof message !== 'object') return null;\n\n  if (message.documentMessage) {\n    return message.documentMessage;\n  }\n\n  if (message.documentWithCaptionMessage?.message?.documentMessage) {\n    return message.documentWithCaptionMessage.message.documentMessage;\n  }\n\n  if (message.viewOnceMessage?.message?.documentMessage) {\n    return message.viewOnceMessage.message.documentMessage;\n  }\n\n  if (message.ephemeralMessage?.message?.documentMessage) {\n    return message.ephemeralMessage.message.documentMessage;\n  }\n\n  if (message.ephemeralMessage?.message?.documentWithCaptionMessage?.message?.documentMessage) {\n    return message.ephemeralMessage.message.documentWithCaptionMessage.message.documentMessage;\n  }\n\n  return null;\n}\n\nfor (const item of items) {\n  const payload = item.json.body || item.json;\n  const data = payload.data || payload;\n  const key = data.key || data.message?.key || {};\n\n  const remoteJid = key.remoteJid || data.remoteJid || '';\n  const fromMe = key.fromMe === true;\n  const messageId = key.id || data.id || '';\n\n  const message = data.message || {};\n  const documentMessage = findDocumentMessage(message);\n\n  const mimeType =\n    documentMessage?.mimetype ||\n    documentMessage?.mimeType ||\n    data.mimetype ||\n    data.mimeType ||\n    '';\n\n  const originalFilename =\n    documentMessage?.fileName ||\n    documentMessage?.title ||\n    data.fileName ||\n    data.filename ||\n    `whatsapp_${messageId}.pdf`;\n\n  const isCorrectGroup = remoteJid === GROUP_ID;\n\n  const isPdf =\n    String(mimeType).toLowerCase().includes('pdf') ||\n    String(originalFilename).toLowerCase().endsWith('.pdf');\n\n  // Importante:\n  // No filtramos por fromMe, porque si tú mandas el PDF desde el WhatsApp conectado\n  // a Evolution, viene como fromMe=true y antes se descartaba.\n  if (!isCorrectGroup || !isPdf || !messageId) {\n    continue;\n  }\n\n  const filename = sanitizeFilename(originalFilename);\n  const originalKey = `entrada-whatsapp/${filename}`;\n\n  output.push({\n    json: {\n      instance: payload.instance || 'ADDO v2',\n      group_id: remoteJid,\n      message_id: messageId,\n      message_key: key,\n      filename,\n      base_name: filename.replace(/\\.pdf$/i, ''),\n      mime_type: mimeType || 'application/pdf',\n      original_key: originalKey,\n      original_bucket: 'preflight-pdf',\n      from_me: fromMe,\n      push_name: data.pushName || null,\n      raw_event: payload,\n    },\n  });\n}\n\nreturn output;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -128,
+        48
+      ],
+      "id": "7c756b79-059b-4a23-a052-5b809b47104d",
+      "name": "Code - Filtrar grupo y PDF"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const meta = $('Code - Filtrar grupo y PDF').first().json;\nconst response = $json;\n\nfunction findBase64(obj) {\n  if (!obj || typeof obj !== 'object') return null;\n\n  for (const [key, value] of Object.entries(obj)) {\n    if (typeof value === 'string') {\n      const clean = value.replace(/^data:.*?;base64,/, '');\n\n      const keyLooksRight = key.toLowerCase().includes('base64');\n      const valueLooksRight =\n        value.startsWith('data:application/pdf;base64,') ||\n        (clean.length > 500 && /^[A-Za-z0-9+/=\\r\\n]+$/.test(clean));\n\n      if (keyLooksRight || valueLooksRight) {\n        return clean;\n      }\n    }\n\n    if (value && typeof value === 'object') {\n      const found = findBase64(value);\n      if (found) return found;\n    }\n  }\n\n  return null;\n}\n\nlet base64 =\n  response.base64 ||\n  response.data?.base64 ||\n  response.response?.base64 ||\n  response.media?.base64 ||\n  findBase64(response);\n\nif (!base64) {\n  throw new Error('No se encontró contenido Base64 del PDF en la respuesta de Evolution.');\n}\n\nbase64 = String(base64).replace(/^data:.*?;base64,/, '').replace(/\\s/g, '');\n\nreturn {\n  json: {\n    filename: meta.filename,\n    base_name: meta.base_name,\n    original_key: meta.original_key,\n    original_bucket: meta.original_bucket,\n    group_id: meta.group_id,\n    message_id: meta.message_id,\n    mime_type: 'application/pdf',\n  },\n  binary: {\n    file: {\n      data: base64,\n      mimeType: 'application/pdf',\n      fileName: meta.filename,\n    },\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        48
+      ],
+      "id": "7f125fc6-58a1-422f-a7a3-e7422752f9c0",
+      "name": "Code - Convertir Base64 a PDF"
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "preflight-pdf",
+        "fileName": "={{ $json.original_key }}",
+        "binaryPropertyName": "file",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        544,
+        48
+      ],
+      "id": "65bb9383-1e6a-4ca2-a0ea-4ae8ad1d3b52",
+      "name": "S3 - Guardar PDF WhatsApp",
+      "credentials": {
+        "s3": {
+          "id": "qrOXGDUvBfFXf89d",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "bucketName": "preflight-pdf",
+        "fileKey": "={{ $(\"Code - Convertir Base64 a PDF\").first().json.original_key }}",
+        "binaryPropertyName": "file"
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        768,
+        48
+      ],
+      "id": "beba0dab-28bf-4923-908e-3aa98497a163",
+      "name": "S3 - Descargar PDF WhatsApp",
+      "credentials": {
+        "s3": {
+          "id": "qrOXGDUvBfFXf89d",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.0.119:8001/analyze",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer mi-token-secreto"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "file"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d31f426f-797e-4ee6-843c-5d262dac4187",
+      "name": "HTTP Request - Analizar PDF1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        992,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const analysis = $json;\nconst meta = $('Code - Convertir Base64 a PDF').first().json;\n\nanalysis.filename = meta.filename;\nanalysis.original_key = meta.original_key;\nanalysis.original_bucket = meta.original_bucket;\nanalysis.source = 'whatsapp';\nanalysis.whatsapp = {\n  group_id: meta.group_id,\n  message_id: meta.message_id,\n};\n\nreturn {\n  json: analysis,\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1216,
+        48
+      ],
+      "id": "696e195a-540f-4762-8967-d05be7fe9203",
+      "name": "Code - Inyectar metadata WhatsApp"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.0.119:8282/chat/getBase64FromMediaMessage/ADDO%20v2",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    message: {\n      key: $json.message_key\n    },\n    convertToMp4: false\n  }\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        96,
+        48
+      ],
+      "id": "39f9343d-bd41-4446-bdfc-dfe8dafaca90",
+      "name": "HTTP Request - Obtener PDF Base64",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "0BTcqdurbeIAvpvG",
+          "name": "Header Auth account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Code - Preparar informe": {
+      "main": [
+        [
+          {
+            "node": "Upload HTML",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Upload JSON",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code - Preparar destino PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload HTML": {
+      "main": [
+        [
+          {
+            "node": "Merge - Informes subidos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload JSON": {
+      "main": [
+        [
+          {
+            "node": "Merge - Informes subidos",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Code - Preparar resumen": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Enviar WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Preparar destino PDF": {
+      "main": [
+        [
+          {
+            "node": "S3 - Descargar PDF para mover",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge - Informes subidos": {
+      "main": [
+        [
+          {
+            "node": "Merge - Todo completado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S3 - Borrar PDF de entrada": {
+      "main": [
+        [
+          {
+            "node": "Merge - Todo completado",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge - Todo completado": {
+      "main": [
+        [
+          {
+            "node": "Code - Preparar resumen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S3 - Subir PDF a destino": {
+      "main": [
+        [
+          {
+            "node": "S3 - Borrar PDF de entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S3 - Descargar PDF para mover": {
+      "main": [
+        [
+          {
+            "node": "S3 - Subir PDF a destino",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - Evolution WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Code - Filtrar grupo y PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Filtrar grupo y PDF": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Obtener PDF Base64",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Convertir Base64 a PDF": {
+      "main": [
+        [
+          {
+            "node": "S3 - Guardar PDF WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S3 - Guardar PDF WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "S3 - Descargar PDF WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S3 - Descargar PDF WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Analizar PDF1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - Analizar PDF1": {
+      "main": [
+        [
+          {
+            "node": "Code - Inyectar metadata WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Inyectar metadata WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Code - Preparar informe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - Obtener PDF Base64": {
+      "main": [
+        [
+          {
+            "node": "Code - Convertir Base64 a PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "UslOMwwiH98sBT9V",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "74be421d-52a9-451d-aacc-4c6addc58b36",
+  "activeVersionId": null,
+  "versionCounter": 114,
+  "triggerCount": 1,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-04-30T16:20:45.428Z",
+      "createdAt": "2026-04-30T16:20:45.428Z",
+      "role": "workflow:owner",
+      "workflowId": "KrQoW2SbkunZX5R7",
+      "projectId": "Oydmi9LKo6hnXrnp",
+      "project": {
+        "updatedAt": "2026-04-20T15:31:20.051Z",
+        "createdAt": "2026-04-20T15:12:06.805Z",
+        "id": "Oydmi9LKo6hnXrnp",
+        "name": "Ximo Soler <grafico@addoimpresores.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "3068be6c-0e51-439e-8bf9-e72776c398e1"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": "Version 74be421d",
+    "description": ""
+  }
+}

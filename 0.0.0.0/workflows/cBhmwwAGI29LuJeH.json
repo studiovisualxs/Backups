@@ -1,0 +1,1383 @@
+{
+  "updatedAt": "2026-05-16T09:05:22.732Z",
+  "createdAt": "2026-05-13T20:39:25.429Z",
+  "id": "cBhmwwAGI29LuJeH",
+  "name": "Facebook IA a Google Sheets - TODOS LOS POSTS v2",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "3135e186-e679-4bf1-b817-36b64ab5f674",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -576,
+        -688
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "1v3sHH5sS-Xbyx1ThnEUijMXL5uPX0wfVZpjrZ05ewtc",
+          "mode": "list",
+          "cachedResultName": "Repositorio_IA_Facebook_n8n",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1v3sHH5sS-Xbyx1ThnEUijMXL5uPX0wfVZpjrZ05ewtc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1242321113,
+          "mode": "list",
+          "cachedResultName": "Cuentas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1v3sHH5sS-Xbyx1ThnEUijMXL5uPX0wfVZpjrZ05ewtc/edit#gid=1242321113"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -128,
+        -784
+      ],
+      "id": "b1885d65-16b7-4b83-9bb4-9c34770131ab",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleApi": {
+          "id": "WqqKIfHDEaQErgAl",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e16573ed-9174-4351-94cb-0a59c06e7ea2",
+              "leftValue": "={{$json.activo}}",
+              "rightValue": "SI",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        96,
+        -784
+      ],
+      "id": "529d0d51-7f7d-49e0-8d5d-9c8b095925a2",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.0.119:3000/function/?token=n8n_browserless_2026&timeout=120000",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "context",
+              "value": "={{ {\n  url: $json.scrape_url,\n  nombre: $json.nombre,\n  pagina_url: $json.url,\n  palabras_clave: $json.palabras_clave,\n  cookies: [\n    { name: 'c_user', value: $json.fb_c_user, domain: '.facebook.com', path: '/' },\n    { name: 'xs', value: $json.fb_xs, domain: '.facebook.com', path: '/' },\n    { name: 'datr', value: $json.fb_datr, domain: '.facebook.com', path: '/' },\n    { name: 'fr', value: $json.fb_fr, domain: '.facebook.com', path: '/' },\n    { name: 'sb', value: $json.fb_sb, domain: '.facebook.com', path: '/' }\n  ]\n} }}"
+            },
+            {
+              "name": "code",
+              "value": "=export default async ({ page, context }) => {\n  /*\n   * CONFIGURACIÓN RÁPIDA\n   * Cambia estos valores si quieres más o menos posts.\n   *\n   * MAX_POSTS_A_EXTRAER:\n   * número máximo de posts candidatos que Browserless devuelve.\n   *\n   * SCROLL_PASADAS:\n   * número de veces que baja por la página.\n   * Más scrolls = más posts cargados, pero más lento.\n   */\n  const MAX_POSTS_A_EXTRAER = 30;\n  const SCROLL_PASADAS = 20;\n  const ESPERA_INICIAL_MS = 8000;\n  const ESPERA_ENTRE_SCROLL_MS = 2500;\n\n  /*\n   * Tu versión de Browserless no soporta page.waitForTimeout().\n   * Usamos sleep() para esperar.\n   */\n  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));\n\n  await page.setViewport({ width: 1365, height: 2400 });\n\n  /*\n   * Aplicamos cookies de Facebook.\n   * Van dentro de context.cookies, no como campo separado.\n   */\n  if (context.cookies && Array.isArray(context.cookies)) {\n    await page.setCookie(...context.cookies);\n  }\n\n  await page.goto(context.url, {\n    waitUntil: 'domcontentloaded',\n    timeout: 120000,\n  });\n\n  await sleep(ESPERA_INICIAL_MS);\n\n  for (let i = 0; i < SCROLL_PASADAS; i++) {\n    await page.evaluate(() => window.scrollBy(0, window.innerHeight * 0.9));\n    await sleep(ESPERA_ENTRE_SCROLL_MS);\n  }\n\n  /*\n   * Intentamos abrir textos truncados:\n   * See more / Ver más / Mostrar más\n   */\n  for (let i = 0; i < 5; i++) {\n    await page.evaluate(() => {\n      const labels = [\n        'See more',\n        'Ver más',\n        'Mostrar más',\n        'See translation',\n        'Ver traducción',\n      ];\n\n      const nodes = [...document.querySelectorAll('div[role=\"button\"], span, a')];\n\n      for (const node of nodes) {\n        const txt = String(node.innerText || node.textContent || '').trim();\n\n        if (labels.includes(txt)) {\n          try {\n            node.click();\n          } catch (e) {}\n        }\n      }\n    });\n\n    await sleep(1200);\n  }\n\n  const data = await page.evaluate((context, maxPosts) => {\n    function cleanText(s) {\n      return String(s || '')\n        .replace(/\\s+/g, ' ')\n        .replace(/Ver original · Califica esta traducción/gi, '')\n        .replace(/Ver original/gi, '')\n        .replace(/Califica esta traducción/gi, '')\n        .replace(/See translation/gi, '')\n        .replace(/Rate this translation/gi, '')\n        .trim();\n    }\n\n    function removeUiNoise(s) {\n      return String(s || '')\n        .replace(/\\bLike\\b/gi, '')\n        .replace(/\\bComment\\b/gi, '')\n        .replace(/\\bShare\\b/gi, '')\n        .replace(/\\bSend\\b/gi, '')\n        .replace(/\\bFollow\\b/gi, '')\n        .replace(/\\bAll reactions:\\s*\\d+/gi, '')\n        .replace(/\\bView more comments\\b/gi, '')\n        .replace(/\\bWrite a comment\\b/gi, '')\n        .replace(/\\s+/g, ' ')\n        .trim();\n    }\n\n    function isBadText(t) {\n      return /Forgot Account|Join Facebook|Log in|Create new account|Recover|Cookies|Meta ©|Privacy|Terms|Messenger|Watch|Marketplace|Gaming|Fundraisers/i.test(t);\n    }\n\n    function isProbablyCssGarbage(t) {\n      return /x[a-z0-9]{5,}\\s+x[a-z0-9]{5,}\\s+x[a-z0-9]{5,}/i.test(t);\n    }\n\n    function isUsefulText(t) {\n      if (!t) return false;\n      if (t.length < 40) return false;\n      if (isBadText(t)) return false;\n      if (isProbablyCssGarbage(t)) return false;\n      return true;\n    }\n\n    function bestImage(root) {\n      const imgs = [...root.querySelectorAll('img')]\n        .map(img => img.currentSrc || img.src || '')\n        .filter(Boolean)\n        .filter(src => /^https?:\\/\\//i.test(src))\n        .filter(src => /scontent|fbcdn/i.test(src))\n        .filter(src => !/hsts-pixel|emoji|static\\.xx\\.fbcdn\\.net|safe_image|p64x64|s64x64|c0\\.0\\./i.test(src));\n\n      imgs.sort((a, b) => {\n        const getSize = (u) => {\n          const m = u.match(/s(\\d+)x(\\d+)/i);\n          if (!m) return 0;\n          return Number(m[1]) * Number(m[2]);\n        };\n\n        return getSize(b) - getSize(a);\n      });\n\n      return imgs[0] || '';\n    }\n\n    function cleanFacebookPostUrl(url) {\n      if (!url) return context.url;\n\n      try {\n        const u = new URL(url);\n        u.searchParams.delete('__cft__[0]');\n        u.searchParams.delete('__tn__');\n        u.searchParams.delete('mibextid');\n        u.searchParams.delete('ref');\n        u.searchParams.delete('refid');\n        u.searchParams.delete('locale');\n        return u.toString();\n      } catch {\n        return url;\n      }\n    }\n\n    function bestPostUrl(root) {\n      const links = [...root.querySelectorAll('a')]\n        .map(a => a.href || '')\n        .filter(Boolean)\n        .filter(href =>\n          href.includes('/photo') ||\n          href.includes('fbid=') ||\n          href.includes('/posts/') ||\n          href.includes('/reel/') ||\n          href.includes('story.php') ||\n          href.includes('permalink.php')\n        );\n\n      return cleanFacebookPostUrl(links[0] || context.url);\n    }\n\n    function extractBetterPostText(root) {\n      const allTexts = [];\n\n      const possibleTextNodes = [\n        ...root.querySelectorAll('[dir=\"auto\"]'),\n        ...root.querySelectorAll('span'),\n        ...root.querySelectorAll('div'),\n      ];\n\n      for (const node of possibleTextNodes) {\n        const text = removeUiNoise(cleanText(node.innerText || node.textContent || ''));\n\n        if (!text) continue;\n        if (text.length < 15) continue;\n        if (isBadText(text)) continue;\n        if (isProbablyCssGarbage(text)) continue;\n\n        allTexts.push(text);\n      }\n\n      const unique = [];\n      const seen = new Set();\n\n      for (const t of allTexts) {\n        const key = t.toLowerCase();\n        if (seen.has(key)) continue;\n\n        seen.add(key);\n\n        if (/^(like|comment|share|send|follow|\\d+|·)$/i.test(t)) continue;\n\n        unique.push(t);\n      }\n\n      const promptLike = unique.filter(t => {\n        const l = t.toLowerCase();\n\n        return (\n          l.includes('prompt') ||\n          l.includes('chatgpt') ||\n          l.includes('upload your image') ||\n          l.includes('sube tu imagen') ||\n          l.includes('open chatgpt') ||\n          l.includes('abrir chatgpt') ||\n          l.includes('midjourney') ||\n          l.includes('stable diffusion') ||\n          l.includes('dall-e')\n        );\n      });\n\n      if (promptLike.length) {\n        return promptLike\n          .sort((a, b) => b.length - a.length)\n          .slice(0, 4)\n          .join('\\n\\n')\n          .trim();\n      }\n\n      return removeUiNoise(cleanText(root.innerText || '')).slice(0, 6000);\n    }\n\n    function scoreText(text, image) {\n      const lower = text.toLowerCase();\n      let score = 0;\n\n      if (lower.includes('prompt')) score += 80;\n      if (lower.includes('chatgpt')) score += 60;\n      if (lower.includes('upload your image')) score += 50;\n      if (lower.includes('sube tu imagen')) score += 50;\n      if (lower.includes('open chatgpt')) score += 50;\n      if (lower.includes('abrir chatgpt')) score += 50;\n      if (lower.includes('midjourney')) score += 40;\n      if (lower.includes('stable diffusion')) score += 40;\n      if (lower.includes('dall-e')) score += 40;\n      if (lower.includes('retrato')) score += 20;\n      if (lower.includes('render')) score += 15;\n      if (lower.includes('photoshop')) score += 15;\n      if (lower.includes('tutorial')) score += 15;\n      if (lower.includes('diseño')) score += 10;\n      if (lower.includes('branding')) score += 10;\n      if (image) score += 25;\n\n      score += Math.min(text.length / 100, 30);\n\n      if (isBadText(text)) score -= 100;\n      if (isProbablyCssGarbage(text)) score -= 100;\n\n      return score;\n    }\n\n    const candidates = [];\n\n    const articleNodes = [\n      ...document.querySelectorAll('[role=\"article\"]'),\n      ...document.querySelectorAll('div[data-pagelet*=\"FeedUnit\"]'),\n      ...document.querySelectorAll('div'),\n    ];\n\n    for (const node of articleNodes) {\n      const text = extractBetterPostText(node);\n\n      if (!isUsefulText(text)) continue;\n\n      const image = bestImage(node);\n      const postUrl = bestPostUrl(node);\n      const score = scoreText(text, image);\n\n      if (text.length > 8000) continue;\n\n      candidates.push({\n        texto_limpio: text.slice(0, 6000),\n        imagen_url: image,\n        post_url: postUrl,\n        score,\n      });\n    }\n\n    candidates.sort((a, b) => b.score - a.score);\n\n    const bodyText = cleanText(document.body.innerText || '');\n\n    return {\n      nombre: context.nombre,\n      url: context.pagina_url,\n      palabras_clave: context.palabras_clave,\n      scrape_url: context.url,\n      page_title: document.title,\n      debug_candidates_count: candidates.length,\n      debug_body_text: bodyText.slice(0, 5000),\n      posts: candidates.slice(0, maxPosts),\n    };\n  }, context, MAX_POSTS_A_EXTRAER);\n\n  return {\n    data,\n    type: 'application/json',\n  };\n};"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        768,
+        -784
+      ],
+      "id": "ac90596c-527e-4ebe-85d4-7a1845ec58f8",
+      "name": "Browserless Scraper"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\n/*\n * CONFIGURACIÓN RÁPIDA\n * Cambia este número si quieres crear PDFs para más o menos posts por ejecución.\n *\n * Ejemplos:\n *  - 5  = máximo 5 PDFs\n *  - 15 = recomendado\n *  - 30 = máximo 30 PDFs\n */\nconst MAX_POSTS_A_PROCESAR = 30;\n\n/*\n * CONFIGURACIÓN DE FILTRO\n * true  = solo guarda posts relacionados con prompts/IA o con tus palabras clave.\n * false = guarda cualquier post visible con texto/imagen útil.\n */\nconst SOLO_POSTS_RELEVANTES = false;\n\nfunction hash(value = '') {\n  return crypto\n    .createHash('sha256')\n    .update(String(value))\n    .digest('hex')\n    .slice(0, 24);\n}\n\nfunction cleanUrl(url = '') {\n  url = String(url || '').trim();\n\n  try {\n    const u = new URL(url);\n\n    // Quitamos parámetros que Facebook cambia constantemente\n    u.searchParams.delete('__cft__[0]');\n    u.searchParams.delete('__tn__');\n    u.searchParams.delete('mibextid');\n    u.searchParams.delete('ref');\n    u.searchParams.delete('refid');\n    u.searchParams.delete('locale');\n\n    return u.origin + u.pathname + (u.search ? u.search : '');\n  } catch {\n    return url.split('?')[0];\n  }\n}\n\nfunction getStablePostId(url = '') {\n  url = String(url || '');\n\n  // Reels: /reel/967376516157967/\n  let m = url.match(/\\/reel\\/(\\d+)/i);\n  if (m) return `reel_${m[1]}`;\n\n  // Fotos: fbid=106748115604529\n  m = url.match(/[?&]fbid=(\\d+)/i);\n  if (m) return `fbid_${m[1]}`;\n\n  // Posts: /posts/123...\n  m = url.match(/\\/posts\\/([^/?#]+)/i);\n  if (m) return `post_${m[1]}`;\n\n  // Stories: story_fbid=123\n  m = url.match(/[?&]story_fbid=(\\d+)/i);\n  if (m) return `story_${m[1]}`;\n\n  // Permalink: permalink.php?story_fbid=123&id=456\n  m = url.match(/permalink\\.php.*?[?&]story_fbid=(\\d+)/i);\n  if (m) return `story_${m[1]}`;\n\n  // Fallback estable: URL limpia\n  return cleanUrl(url);\n}\n\nfunction cleanFinalText(t = '') {\n  return String(t || '')\n    .replace(/\\s+/g, ' ')\n    .replace(/Forgot Account\\?/gi, '')\n    .replace(/Join Facebook/gi, '')\n    .replace(/Log in/gi, '')\n    .replace(/Create new account/gi, '')\n    .replace(/Posts About Reels/gi, '')\n    .replace(/\\bLike\\b/gi, '')\n    .replace(/\\bComment\\b/gi, '')\n    .replace(/\\bShare\\b/gi, '')\n    .replace(/\\bSend\\b/gi, '')\n    .replace(/\\bSee more\\b/gi, '')\n    .replace(/\\bVer más\\b/gi, '')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nfunction isBadPostText(t = '') {\n  if (!t || t.length < 40) return true;\n\n  if (/Forgot Account|Join Facebook|Log in to continue|Create new account|Recover/i.test(t)) {\n    return true;\n  }\n\n  // Clases CSS raras de Facebook\n  if (/x[a-z0-9]{5,}\\s+x[a-z0-9]{5,}\\s+x[a-z0-9]{5,}/i.test(t)) {\n    return true;\n  }\n\n  return false;\n}\n\nfunction scorePost(post) {\n  const text = String(post.texto_limpio || '').toLowerCase();\n  let score = Number(post.score || 0);\n\n  if (text.includes('prompt')) score += 80;\n  if (text.includes('chatgpt')) score += 60;\n  if (text.includes('sube tu imagen')) score += 60;\n  if (text.includes('upload your image')) score += 60;\n  if (text.includes('abrir chatgpt')) score += 60;\n  if (text.includes('open chatgpt')) score += 60;\n  if (text.includes('midjourney')) score += 50;\n  if (text.includes('stable diffusion')) score += 50;\n  if (text.includes('dall-e')) score += 50;\n  if (text.includes('retrato')) score += 30;\n  if (text.includes('portrait')) score += 30;\n  if (text.includes('render')) score += 25;\n  if (text.includes('photoshop')) score += 20;\n  if (text.includes('tutorial')) score += 20;\n  if (text.includes('diseño')) score += 15;\n  if (text.includes('branding')) score += 15;\n  if (post.imagen_url) score += 25;\n\n  return score;\n}\n\nfunction getFiltroContenido(data, j) {\n  const raw =\n    data.filtro_contenido ||\n    j.filtro_contenido ||\n    data.palabras_clave ||\n    j.palabras_clave ||\n    '';\n\n  return String(raw)\n    .split(',')\n    .map(x => x.trim().toLowerCase())\n    .filter(Boolean);\n}\n\nfunction hasPromptSignal(text = '') {\n  const t = String(text || '').toLowerCase();\n\n  return (\n    t.includes('prompt') ||\n    t.includes('chatgpt') ||\n    t.includes('sube tu imagen') ||\n    t.includes('upload your image') ||\n    t.includes('abrir chatgpt') ||\n    t.includes('open chatgpt') ||\n    t.includes('midjourney') ||\n    t.includes('stable diffusion') ||\n    t.includes('dall-e') ||\n    t.includes('retrato') ||\n    t.includes('portrait') ||\n    t.includes('render octane') ||\n    t.includes('image prompt') ||\n    t.includes('ai image') ||\n    t.includes('generative ai')\n  );\n}\n\nfunction matchesUserFilter(text = '', filtros = []) {\n  if (!filtros.length) return true;\n\n  const t = String(text || '').toLowerCase();\n\n  return filtros.some(f => t.includes(f));\n}\n\nconst out = [];\n\nfor (const item of items) {\n  const j = item.json || {};\n\n  const data =\n    j.data ||\n    j.body?.data ||\n    j.response?.data ||\n    j;\n\n  let posts = Array.isArray(data.posts) ? data.posts : [];\n  const filtros = getFiltroContenido(data, j);\n\n  posts = posts\n    .map(post => ({\n      ...post,\n      texto_limpio: cleanFinalText(post.texto_limpio || ''),\n      post_url: cleanUrl(post.post_url || data.url || j.url || ''),\n    }))\n\n    // Quita login, CSS y basura\n    .filter(post => !isBadPostText(post.texto_limpio))\n\n    // Debe tener imagen real o texto suficiente\n    .filter(post => post.imagen_url || post.texto_limpio.length > 120)\n\n    // Filtro de relevancia\n    .filter(post => {\n      if (!SOLO_POSTS_RELEVANTES) return true;\n\n      const texto = post.texto_limpio || '';\n      const coincideFiltro = matchesUserFilter(texto, filtros);\n      const tienePrompt = hasPromptSignal(texto);\n\n      if (tienePrompt) return true;\n      if (post.imagen_url && coincideFiltro) return true;\n\n      return false;\n    })\n\n    .sort((a, b) => scorePost(b) - scorePost(a));\n\n  if (!posts.length) {\n    out.push({\n      json: {\n        ...j,\n        nombre: data.nombre || j.nombre || 'Facebook',\n        cuenta: data.nombre || j.nombre || 'Facebook',\n        url: data.url || j.url || '',\n        pagina_url: data.url || j.url || '',\n        scrape_ok: false,\n        post_nuevo: false,\n        es_nuevo: false,\n        estado: 'SIN_POSTS_UTILES',\n        motivo: 'No se encontraron posts que coincidan con prompts/IA o filtros de contenido',\n        debug_candidates_count: data.debug_candidates_count || 0,\n        debug_body_text: data.debug_body_text || data.page_text_sample || '',\n      },\n    });\n    continue;\n  }\n\n  const unique = new Map();\n\n  /*\n   * AQUÍ SE LIMITA CUÁNTOS POSTS SE CONVIERTEN EN ITEMS\n   * Cada item que salga de aquí podrá generar 1 PDF.\n   * Cambia MAX_POSTS_A_PROCESAR arriba del todo.\n   */\n  for (const post of posts.slice(0, MAX_POSTS_A_PROCESAR)) {\n    const texto = String(post.texto_limpio || '').trim();\n    const imagen = String(post.imagen_url || '').trim();\n    const postUrl = cleanUrl(post.post_url || data.url || j.url || '');\n\n    /*\n     * IMPORTANTE:\n     * Sacamos un ID estable del post/reel/foto.\n     * Así no se repite aunque Facebook añada parámetros nuevos a la URL.\n     */\n    const postId = getStablePostId(postUrl);\n\n    /*\n     * IMPORTANTE:\n     * El hash depende del ID estable, no del texto ni de likes/comentarios.\n     * Así el mismo post no se vuelve a procesar si cambian reacciones o comentarios.\n     */\n    const postHash = hash(postId);\n\n    if (!postId || !postHash) continue;\n\n    if (unique.has(postHash)) continue;\n\n    unique.set(postHash, {\n      cuenta: data.nombre || j.nombre || 'Facebook',\n      nombre: data.nombre || j.nombre || 'Facebook',\n\n      // URL de la página/cuenta origen\n      url: data.url || j.url || '',\n      pagina_url: data.url || j.url || '',\n\n      // Datos del post\n      post_url: postUrl,\n      post_hash: postHash,\n      post_id: postId,\n\n      fecha_detectado: new Date().toISOString().slice(0, 10),\n      texto_limpio: texto,\n      imagen_url: imagen,\n\n      palabras_clave: data.palabras_clave || j.palabras_clave || '',\n      categoria: data.palabras_clave || j.palabras_clave || '',\n\n      scrape_ok: true,\n      estado: 'OK',\n      motivo: 'Post visible extraído desde DOM con sesión',\n\n      debug_score: scorePost(post),\n      debug_original_post_url: post.post_url || '',\n      debug_stable_post_id: postId,\n    });\n  }\n\n  for (const post of unique.values()) {\n    out.push({ json: post });\n  }\n}\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        -784
+      ],
+      "id": "10dd8d2c-dce1-443f-aa8a-e017a3f92a4a",
+      "name": "Extraer posts Facebook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "851b1b36-4c79-4b51-b7e0-1ca4a2d0968e",
+              "leftValue": "={{ $json.post_nuevo }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1440,
+        -784
+      ],
+      "id": "d6eaf59d-dae9-4f86-90d6-5af84f8f36cc",
+      "name": "IF - Post nuevo OK"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst j = $json;\n\nconst prompt_ia = `\nEres un analista de contenido para crear ideas de prompts de IA.\n\nAnaliza SOLO la información disponible. No inventes datos.\n\nCuenta: ${j.nombre || j.cuenta}\nPost URL: ${j.post_url || j.url}\nPágina origen: ${j.cuenta_url || j.original_url || ''}\nPalabras clave esperadas: ${j.palabras_clave}\n\nTexto del post:\n${j.texto_limpio}\n\nImagen detectada:\n${j.imagen_url || 'No se detectó imagen'}\n\nDevuelve la respuesta en Markdown con esta estructura:\n\n# Análisis de ${j.nombre || j.cuenta}\n\n## Resumen\nResume qué contiene este post.\n\n## Texto / prompt detectado\nSi el post incluye un prompt, extráelo completo. Si está en español, mantenlo en español.\n\n## Estilo visual detectado\nDescribe la estética, composición, colores, sujeto, iluminación y detalles relevantes de la imagen si hay URL de imagen.\n\n## Ideas de prompts\nCrea 5 prompts útiles basados en el post.\n\n## Recomendación\nDi si merece la pena guardar este post en PDF: SÍ o NO, y por qué.\n`.trim();\n\nreturn { json: { ...j, prompt_ia } };\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1664,
+        -880
+      ],
+      "id": "9a5aa067-5a0f-42e2-9edb-db20a262de8d",
+      "name": "Preparar prompt IA"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "llama3.2:1b",
+          "mode": "list",
+          "cachedResultName": "llama3.2:1b"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.prompt_ia }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.ollama",
+      "typeVersion": 1,
+      "position": [
+        1888,
+        -880
+      ],
+      "id": "6dd08d04-f906-4633-96a5-c32fe3e4408d",
+      "name": "Message a model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "Xc8joqnr5hfoTVKJ",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst ai = $json;\nconst base = $('Preparar prompt IA').item.json;\n\nfunction getAiText(j) {\n  if (typeof j === 'string') return j;\n  return String(\n    j.output?.text ||\n    j.output ||\n    j.text ||\n    j.content ||\n    j.message?.content ||\n    j.message ||\n    j.response?.content ||\n    j.response ||\n    j.result ||\n    j.data ||\n    ''\n  );\n}\n\nconst promptFinal = getAiText(ai).trim();\n\nreturn {\n  json: {\n    fecha: base.fecha_detectado || base.ultima_revision,\n    cuenta: base.nombre || base.cuenta,\n    texto: base.texto_limpio,\n    prompt: promptFinal,\n    imagen_url: base.imagen_url || '',\n    post_url: base.post_url || base.url,\n    cuenta_url: base.cuenta_url || base.original_url || '',\n    categoria: base.palabras_clave,\n    exportado_pdf: 'NO',\n    post_hash: base.post_hash,\n    ultimo_hash: base.ultimo_hash || base.post_hash,\n    url: base.post_url || base.url,\n    update_url: base.cuenta_url || base.original_url || base.url,\n    ultima_revision: base.ultima_revision,\n  },\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        -880
+      ],
+      "id": "66c4fcdb-3415-48b1-9856-6e6f61b701cc",
+      "name": "Preparar fila Resultado"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nlet base = {};\ntry { base = $('Renombrar PDF').item.json; } catch (e) {}\nif (!base.update_url) { try { base = $('Preparar fila Resultado').item.json; } catch (e) {} }\nif (!base.update_url) { try { base = $('Preparar prompt IA').item.json; } catch (e) {} }\n\nreturn {\n  json: {\n    url: base.update_url || base.cuenta_url || base.original_url || base.url,\n    nombre: base.cuenta || base.nombre,\n    ultima_revision: base.ultima_revision || base.fecha,\n    ultimo_hash: base.post_hash || base.ultimo_hash,\n    estado: 'OK',\n    motivo: 'Post nuevo procesado',\n  },\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        -880
+      ],
+      "id": "12f5e922-8e24-4d3b-b4d4-fe26216439a5",
+      "name": "Preparar actualización Cuenta"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1v3sHH5sS-Xbyx1ThnEUijMXL5uPX0wfVZpjrZ05ewtc",
+          "mode": "list",
+          "cachedResultName": "Repositorio_IA_Facebook_n8n",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1v3sHH5sS-Xbyx1ThnEUijMXL5uPX0wfVZpjrZ05ewtc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1242321113,
+          "mode": "list",
+          "cachedResultName": "Cuentas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1v3sHH5sS-Xbyx1ThnEUijMXL5uPX0wfVZpjrZ05ewtc/edit#gid=1242321113"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "url": "={{ $json.url }}",
+            "ultima_revision": "={{ $json.ultima_revision }}",
+            "estado": "={{ $json.estado }}",
+            "motivo": "={{ $json.motivo }}",
+            "ultimo_hash": "={{ $json.ultimo_hash }}"
+          },
+          "matchingColumns": [
+            "url"
+          ],
+          "schema": [
+            {
+              "id": "nombre",
+              "displayName": "nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "url",
+              "displayName": "url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tipo",
+              "displayName": "tipo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "activo",
+              "displayName": "activo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "palabras_clave",
+              "displayName": "palabras_clave",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "procesado",
+              "displayName": "procesado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ultima_revision",
+              "displayName": "ultima_revision",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ultimo_hash",
+              "displayName": "ultimo_hash",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "motivo",
+              "displayName": "motivo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        4256,
+        -880
+      ],
+      "id": "c2f7efc4-7d39-4225-a223-3ae1d86b615f",
+      "name": "Update row in Cuentas",
+      "credentials": {
+        "googleApi": {
+          "id": "WqqKIfHDEaQErgAl",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst j = $json;\n\nlet estado = j.scrape_ok && !j.post_nuevo ? 'SIN_POSTS_NUEVOS' : (j.scrape_status || j.estado || 'SIN_TEXTO_UTIL');\nlet motivo = j.scrape_ok && !j.post_nuevo ? 'Post ya registrado en hoja Posts' : (j.scrape_motivo || j.motivo || 'No se obtuvo contenido útil');\n\nreturn {\n  json: {\n    url: j.cuenta_url || j.original_url || j.url,\n    nombre: j.nombre || j.cuenta,\n    ultima_revision: j.ultima_revision,\n    ultimo_hash: j.post_hash || '',\n    estado,\n    motivo,\n  },\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1664,
+        -688
+      ],
+      "id": "7c9c235b-3be2-4c9c-a996-57cc460f59d7",
+      "name": "Preparar actualización fallo"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1v3sHH5sS-Xbyx1ThnEUijMXL5uPX0wfVZpjrZ05ewtc",
+          "mode": "list",
+          "cachedResultName": "Repositorio_IA_Facebook_n8n",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1v3sHH5sS-Xbyx1ThnEUijMXL5uPX0wfVZpjrZ05ewtc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1242321113,
+          "mode": "list",
+          "cachedResultName": "Cuentas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1v3sHH5sS-Xbyx1ThnEUijMXL5uPX0wfVZpjrZ05ewtc/edit#gid=1242321113"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "url": "={{ $json.url }}",
+            "ultima_revision": "={{ $json.ultima_revision }}",
+            "estado": "={{ $json.estado }}",
+            "motivo": "={{ $json.motivo }}",
+            "ultimo_hash": "={{ $json.ultimo_hash }}"
+          },
+          "matchingColumns": [
+            "url"
+          ],
+          "schema": [
+            {
+              "id": "nombre",
+              "displayName": "nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "url",
+              "displayName": "url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tipo",
+              "displayName": "tipo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "activo",
+              "displayName": "activo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "palabras_clave",
+              "displayName": "palabras_clave",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "procesado",
+              "displayName": "procesado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ultima_revision",
+              "displayName": "ultima_revision",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ultimo_hash",
+              "displayName": "ultimo_hash",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "motivo",
+              "displayName": "motivo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1952,
+        -688
+      ],
+      "id": "8b5b12b3-11c8-46d7-8573-1ce117992950",
+      "name": "Update fallo en Cuentas",
+      "credentials": {
+        "googleApi": {
+          "id": "WqqKIfHDEaQErgAl",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1v3sHH5sS-Xbyx1ThnEUijMXL5uPX0wfVZpjrZ05ewtc",
+          "mode": "list",
+          "cachedResultName": "Repositorio_IA_Facebook_n8n",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1v3sHH5sS-Xbyx1ThnEUijMXL5uPX0wfVZpjrZ05ewtc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2135986700,
+          "mode": "list",
+          "cachedResultName": "Resultados",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1v3sHH5sS-Xbyx1ThnEUijMXL5uPX0wfVZpjrZ05ewtc/edit#gid=2135986700"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "fecha": "={{ $json.fecha }}",
+            "cuenta": "={{ $json.cuenta }}",
+            "texto": "={{ $json.texto }}",
+            "prompt": "={{ $json.prompt }}",
+            "imagen_url": "={{ $json.imagen_url }}",
+            "post_url": "={{ $json.post_url }}",
+            "categoria": "={{ $json.categoria }}",
+            "exportado_pdf": "={{ $json.exportado_pdf }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cuenta",
+              "displayName": "cuenta",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "texto",
+              "displayName": "texto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "prompt",
+              "displayName": "prompt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "imagen_url",
+              "displayName": "imagen_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "post_url",
+              "displayName": "post_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "categoria",
+              "displayName": "categoria",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "exportado_pdf",
+              "displayName": "exportado_pdf",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2464,
+        -880
+      ],
+      "id": "a86238fe-40be-4411-9304-3f38ea331ae9",
+      "name": "Append row in Resultados",
+      "credentials": {
+        "googleApi": {
+          "id": "WqqKIfHDEaQErgAl",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://browserless:3000/pdf?token=n8n_browserless_2026",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    html: $json.html,\n    options: {\n      format: 'A4',\n      printBackground: true,\n      margin: {\n        top: '15mm',\n        right: '15mm',\n        bottom: '15mm',\n        left: '15mm'\n      }\n    }\n  }\n}}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2912,
+        -880
+      ],
+      "id": "12992d42-e7aa-4247-b7c4-e06c5785f2d9",
+      "name": "Crear PDF Browserless"
+    },
+    {
+      "parameters": {
+        "fromEmail": "studiovisual.xs@gmail.com",
+        "toEmail": "studiovisual.xs@gmail.com",
+        "subject": "=PDF generado - {{$json.cuenta}} - {{String($json.post_hash || '').slice(0,8)}}",
+        "html": "=<p>PDF generado correctamente.</p>\n<p><strong>Cuenta:</strong> {{$json.cuenta}}</p>\n<p><strong>Post:</strong> {{$json.post_url}}</p>\n<p><strong>Imagen:</strong> {{$json.imagen_url}}</p>\n<p><strong>Fecha:</strong> {{$json.fecha}}</p>",
+        "options": {
+          "appendAttribution": false,
+          "attachments": "data"
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        3360,
+        -880
+      ],
+      "id": "aea15e44-54d8-4401-b762-cb3943e1c951",
+      "name": "Send an Email",
+      "webhookId": "09fe7735-1b77-4eb3-8795-f123292cbc34",
+      "credentials": {
+        "smtp": {
+          "id": "7s7pTTjulVSpVWUt",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst htmlItems = $('Preparar HTML PDF').all();\n\nreturn items.map((item, index) => {\n  const meta = htmlItems[index]?.json || {};\n  const filename = meta.pdf_filename || `documento_${Date.now()}.pdf`;\n\n  item.json = {\n    ...meta,\n    ...item.json,\n    pdf_filename: filename,\n  };\n\n  if (item.binary?.data) {\n    item.binary.data.fileName = filename;\n    item.binary.data.mimeType = 'application/pdf';\n    item.binary.data.fileExtension = 'pdf';\n  }\n\n  return item;\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3136,
+        -880
+      ],
+      "id": "b86dd886-979d-433a-98b0-cd566ad2814a",
+      "name": "Renombrar PDF"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const j = $json;\n\nfunction esc(v) {\n  return String(v ?? '')\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;');\n}\n\nfunction formatPostText(raw = '') {\n  let t = String(raw || '').trim();\n\n  // Limpieza básica de ruido de Facebook\n  t = t\n    .replace(/\\bLike\\b/gi, '')\n    .replace(/\\bComment\\b/gi, '')\n    .replace(/\\bShare\\b/gi, '')\n    .replace(/\\bSend\\b/gi, '')\n    .replace(/\\bSee more\\b/gi, '')\n    .replace(/\\bVer más\\b/gi, '')\n    .replace(/\\bMostrar más\\b/gi, '')\n    .replace(/\\s+/g, ' ')\n    .trim();\n\n  // Saltos antes de pasos tipo \"1. Open ChatGPT 2. Upload...\"\n  t = t.replace(/\\s+(\\d+\\.)\\s+/g, '\\n$1 ');\n\n  // Saltos antes de palabras clave\n  t = t\n    .replace(/\\s+(Prompt\\s*:?\\s*)/gi, '\\n\\n$1')\n    .replace(/\\s+(Negative prompt\\s*:?\\s*)/gi, '\\n\\n$1')\n    .replace(/\\s+(Steps\\s*:?\\s*)/gi, '\\n\\n$1')\n    .replace(/\\s+(Settings\\s*:?\\s*)/gi, '\\n\\n$1')\n    .replace(/\\s+(Seed\\s*:?\\s*)/gi, '\\n\\n$1')\n    .replace(/\\s+(Model\\s*:?\\s*)/gi, '\\n\\n$1');\n\n  // Si hay comillas largas, intenta separarlas\n  t = t.replace(/[\"“]\\s*([^\"”]{120,})\\s*[\"”]/g, '\\n\\n\"$1\"\\n');\n\n  // Evitar demasiados saltos\n  t = t.replace(/\\n{3,}/g, '\\n\\n').trim();\n\n  const lines = t.split('\\n').map(x => x.trim()).filter(Boolean);\n\n  let html = '';\n  let inPromptBlock = false;\n\n  for (const line of lines) {\n    const isStep = /^\\d+\\./.test(line);\n    const isPromptTitle = /^prompt\\s*:?\\s*$/i.test(line) || /^prompt\\s*:/i.test(line);\n    const isNegativeTitle = /^negative prompt\\s*:/i.test(line);\n    const isQuotedLong = /^[\"“].{80,}/.test(line);\n\n    if (isStep) {\n      if (inPromptBlock) {\n        html += `</div>`;\n        inPromptBlock = false;\n      }\n\n      html += `<div class=\"step\">${esc(line)}</div>`;\n      continue;\n    }\n\n    if (isPromptTitle || isNegativeTitle) {\n      if (inPromptBlock) {\n        html += `</div>`;\n      }\n\n      const parts = line.split(/:\\s*/);\n      const title = parts[0] || 'Prompt';\n      const rest = parts.slice(1).join(': ');\n\n      html += `<div class=\"promptTitle\">${esc(title)}</div>`;\n      html += `<div class=\"promptBlock\">`;\n      inPromptBlock = true;\n\n      if (rest) {\n        html += `<p>${esc(rest)}</p>`;\n      }\n\n      continue;\n    }\n\n    if (isQuotedLong) {\n      if (!inPromptBlock) {\n        html += `<div class=\"promptBlock\">`;\n        inPromptBlock = true;\n      }\n\n      html += `<p>${esc(line)}</p>`;\n      continue;\n    }\n\n    if (inPromptBlock) {\n      html += `<p>${esc(line)}</p>`;\n    } else {\n      html += `<p>${esc(line)}</p>`;\n    }\n  }\n\n  if (inPromptBlock) {\n    html += `</div>`;\n  }\n\n  return html || '<p>No se pudo extraer texto del post.</p>';\n}\n\nconst cuenta = j.cuenta || j.nombre || 'Facebook';\nconst fecha = j.fecha || j.fecha_detectado || new Date().toISOString().slice(0, 10);\nconst categoria = j.categoria || j.palabras_clave || '';\nconst postUrl = j.post_url || '';\nconst paginaUrl = j.pagina_url || j.url || '';\nconst imagenUrl = j.imagen_url || '';\nconst textoPost = j.texto || j.texto_limpio || '';\n\nconst imagenHtml = imagenUrl\n  ? `\n    <div class=\"imageBox\">\n      <img src=\"${esc(imagenUrl)}\" />\n    </div>\n    <div class=\"imageUrl\">\n      <strong>Imagen:</strong> ${esc(imagenUrl)}\n    </div>\n  `\n  : `<div class=\"noImage\">No se pudo extraer imagen del post.</div>`;\n\nconst html = `\n<!doctype html>\n<html>\n<head>\n  <meta charset=\"utf-8\">\n  <style>\n    body {\n      font-family: Arial, sans-serif;\n      margin: 34px;\n      color: #222;\n      line-height: 1.5;\n      font-size: 14px;\n    }\n\n    h1 {\n      font-size: 26px;\n      margin-bottom: 6px;\n    }\n\n    h2 {\n      font-size: 18px;\n      margin-top: 28px;\n      border-bottom: 1px solid #ddd;\n      padding-bottom: 6px;\n    }\n\n    .meta {\n      color: #555;\n      font-size: 13px;\n      margin-bottom: 22px;\n      word-break: break-word;\n    }\n\n    .imageBox {\n      text-align: center;\n      margin: 18px 0 18px 0;\n      page-break-inside: avoid;\n    }\n\n    .imageBox img {\n      max-width: 100%;\n      max-height: 760px;\n      border-radius: 10px;\n      object-fit: contain;\n    }\n\n    .imageUrl {\n      font-size: 10px;\n      color: #666;\n      word-break: break-all;\n      margin-bottom: 18px;\n    }\n\n    .textBox {\n      background: #f7f7f7;\n      padding: 18px;\n      border-radius: 10px;\n      margin-bottom: 18px;\n      font-size: 15px;\n      line-height: 1.65;\n    }\n\n    .textBox p {\n      margin: 0 0 12px 0;\n    }\n\n    .step {\n      background: #ffffff;\n      border-left: 5px solid #444;\n      padding: 10px 12px;\n      margin: 10px 0;\n      border-radius: 6px;\n      font-weight: bold;\n      page-break-inside: avoid;\n    }\n\n    .promptTitle {\n      margin-top: 18px;\n      font-size: 17px;\n      font-weight: bold;\n      color: #111;\n    }\n\n    .promptBlock {\n      background: #ffffff;\n      border: 1px solid #ddd;\n      border-left: 5px solid #111;\n      padding: 14px 16px;\n      border-radius: 8px;\n      margin: 10px 0 16px 0;\n      font-family: Georgia, \"Times New Roman\", serif;\n      font-size: 15px;\n      line-height: 1.7;\n      white-space: pre-wrap;\n      page-break-inside: avoid;\n    }\n\n    .promptBlock p {\n      margin: 0 0 12px 0;\n    }\n\n    .noImage {\n      background: #fff4e5;\n      padding: 12px;\n      border-radius: 8px;\n      color: #8a4b00;\n      margin-bottom: 18px;\n    }\n\n    .small {\n      font-size: 12px;\n      color: #777;\n      margin-top: 30px;\n    }\n  </style>\n</head>\n<body>\n  <h1>${esc(cuenta)}</h1>\n\n  <div class=\"meta\">\n    <strong>Fecha:</strong> ${esc(fecha)}<br>\n    <strong>Categoría:</strong> ${esc(categoria)}<br>\n    <strong>Post:</strong> ${esc(postUrl)}<br>\n    <strong>Página:</strong> ${esc(paginaUrl)}\n  </div>\n\n  <h2>Imagen del post</h2>\n  ${imagenHtml}\n\n  <h2>Texto del post</h2>\n  <div class=\"textBox\">\n    ${formatPostText(textoPost)}\n  </div>\n\n  <p class=\"small\">PDF generado automáticamente desde n8n.</p>\n</body>\n</html>\n`;\n\nconst filenameSafe = cuenta\n  .replace(/[^a-z0-9]+/gi, '_')\n  .replace(/^_+|_+$/g, '');\n\nconst hash = String(j.post_hash || Date.now()).slice(0, 8);\n\nreturn {\n  json: {\n    ...j,\n    html,\n    pdf_filename: `${filenameSafe || 'Facebook'}_${fecha}_${hash}.pdf`,\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2688,
+        -880
+      ],
+      "id": "39e5c617-b926-4566-8e98-ef7da2043015",
+      "name": "Preparar HTML PDF"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const j = $json;\n\nfunction normalizeFacebookUrl(url) {\n  let u = String(url || '').trim();\n  if (!u) return '';\n\n  u = u.replace(/\\/$/, '');\n\n  if (/facebook\\.com/i.test(u)) {\n    try {\n      const parsed = new URL(u);\n      let path = parsed.pathname || '/';\n      path = path.replace(/^\\/+/, '').replace(/\\/+$/, '');\n\n      const isPost =\n        /story\\.php|posts|photos|videos|reel|permalink|photo\\.php/i.test(path) ||\n        parsed.searchParams.has('fbid');\n\n      // Para páginas generales usamos m.facebook.com con sesión/cookies\n      if (!isPost) {\n        return `https://m.facebook.com/${path}`;\n      }\n\n      return `https://m.facebook.com/${path}${parsed.search || ''}`;\n    } catch (e) {\n      return u.replace(\n        /^https?:\\/\\/(www\\.|m\\.|mbasic\\.)?facebook\\.com/i,\n        'https://m.facebook.com'\n      );\n    }\n  }\n\n  return u;\n}\n\nconst scrapeUrl = normalizeFacebookUrl(j.url);\n\nreturn {\n  json: {\n    ...j,\n    scrape_url: scrapeUrl,\n    debug_original_url: j.url,\n    debug_scrape_url: scrapeUrl,\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        -784
+      ],
+      "id": "957955b1-7428-4809-b159-bb446ae5392f",
+      "name": "Preparar URL Scrape"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "1v3sHH5sS-Xbyx1ThnEUijMXL5uPX0wfVZpjrZ05ewtc",
+          "mode": "list",
+          "cachedResultName": "Repositorio_IA_Facebook_n8n",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1v3sHH5sS-Xbyx1ThnEUijMXL5uPX0wfVZpjrZ05ewtc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Posts",
+          "mode": "name",
+          "cachedResultName": "Posts"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -352,
+        -784
+      ],
+      "id": "912bbe40-6ec5-4d28-8800-9dc182b3e120",
+      "name": "Get Posts existentes",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleApi": {
+          "id": "WqqKIfHDEaQErgAl",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "/*\n * Este nodo compara los posts detectados con la hoja Posts.\n * Si el post_hash ya existe, no se vuelve a generar PDF.\n * Si no existe, post_nuevo = true y sigue hacia IA/PDF/email.\n */\n\nconst postsDetectados = $input.all();\nconst postsExistentes = $('Get Posts existentes').all();\n\nconst hashesExistentes = new Set();\n\nfor (const item of postsExistentes) {\n  const h = String(item.json.post_hash || '').trim();\n  if (h) hashesExistentes.add(h);\n}\n\nreturn postsDetectados.map(item => {\n  const j = item.json;\n  const postHash = String(j.post_hash || '').trim();\n\n  const postNuevo = Boolean(\n    j.scrape_ok === true &&\n    postHash &&\n    !hashesExistentes.has(postHash)\n  );\n\n  return {\n    json: {\n      ...j,\n      post_nuevo: postNuevo,\n      motivo_post_nuevo: postNuevo\n        ? 'Post nuevo detectado'\n        : 'Post ya existente o sin hash válido',\n    },\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1216,
+        -784
+      ],
+      "id": "0c8d18f3-edaf-4f5e-b382-bd140b323fd7",
+      "name": "Marcar posts nuevos"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1v3sHH5sS-Xbyx1ThnEUijMXL5uPX0wfVZpjrZ05ewtc",
+          "mode": "list",
+          "cachedResultName": "Repositorio_IA_Facebook_n8n",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1v3sHH5sS-Xbyx1ThnEUijMXL5uPX0wfVZpjrZ05ewtc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Posts",
+          "mode": "name",
+          "cachedResultName": "Posts"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "cuenta": "={{ $json.cuenta }}",
+            "post_url": "={{ $json.post_url }}",
+            "post_hash": "={{ $json.post_hash }}",
+            "fecha_detectado": "={{ $json.fecha_detectado }}",
+            "texto": "={{ $json.texto }}",
+            "imagen_url": "={{ $json.imagen_url }}",
+            "procesado": "={{ $json.procesado }}",
+            "post_id": "={{ $json.post_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "cuenta",
+              "displayName": "cuenta",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "post_url",
+              "displayName": "post_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "post_hash",
+              "displayName": "post_hash",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "post_id",
+              "displayName": "post_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fecha_detectado",
+              "displayName": "fecha_detectado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "texto",
+              "displayName": "texto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "imagen_url",
+              "displayName": "imagen_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "procesado",
+              "displayName": "procesado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3808,
+        -880
+      ],
+      "id": "8f3e99dd-a075-46a9-ae14-0f1e34528ae8",
+      "name": "Guardar post en Posts",
+      "credentials": {
+        "googleApi": {
+          "id": "WqqKIfHDEaQErgAl",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "358c54f1-8b14-43bb-8ede-f46aaf04b7e1",
+              "name": "fb_c_user",
+              "value": "100000026355367",
+              "type": "string"
+            },
+            {
+              "id": "f91c8e7a-6dd2-4f3f-bfff-17a49fd7e552",
+              "name": "fb_xs",
+              "value": "40%3A2rbAV40_q9KO2w%3A2%3A1778682733%3A-1%3A-1%3A%3AAcyLonYPKc_7XMkfqB0H9VIE8jHOUYTkOIWztlEaew",
+              "type": "string"
+            },
+            {
+              "id": "d51539d2-2ab8-4188-8bdb-ec91f29b0b93",
+              "name": "fb_datr",
+              "value": "eEkDanhzq5fx823bovtxkd0X",
+              "type": "string"
+            },
+            {
+              "id": "b1b45acd-5b41-4939-9fc3-0b09660d6ec0",
+              "name": "fb_fr",
+              "value": "0jcRuJA8R7eu3jeux.AWcjRQ3TxKF6XfkDk-iYjHUAmja3k5wURQKfzjBW_KKHSMbYSJY.BqBN2l..AAA.0.0.BqBd2a.AWeuC7LznoM3uUnuAxpojpuPNtQ",
+              "type": "string"
+            },
+            {
+              "id": "f2dd8798-870f-4975-9145-6e2dfbbabb39",
+              "name": "fb_sb",
+              "value": "eEkDagJ_M9KB1A-SMYWUmZOP",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        544,
+        -784
+      ],
+      "id": "605c25b7-63e2-4d96-b4c2-da8dcb9e18c5",
+      "name": "Añadir cookies FB"
+    },
+    {
+      "parameters": {
+        "content": "Comentarios claros para que luego puedas cambiar el número de posts sin acordarte de dónde estaba. Si quieres que baje TODO, incluso tutoriales sin prompt: - En Extraer posts Facebook, cambia: const SOLO_POSTS_RELEVANTES = true; por: const SOLO_POSTS_RELEVANTES = false;\n\nCon false, generará PDFs para cualquier post visible útil con imagen/texto, no solo prompts.",
+        "height": 304,
+        "width": 688
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        704,
+        -928
+      ],
+      "typeVersion": 1,
+      "id": "33104657-0f73-49a6-8dd6-ba266ac29789",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 4
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -576,
+        -880
+      ],
+      "id": "ec688287-7276-46b4-a414-a279126fe7d3",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "content": "Para regenerarlas: cierra sesión en Facebook, vuelve a entrar, copia las cookies nuevas y sustitúyelas en Añadir cookies FB.\n\nTu PC/Firefox logueado en Facebook\n→ copias cookies c_user, xs, datr, fr, sb\n→ las pegas en n8n\n→ Browserless las usa como si fuera esa sesión",
+        "height": 528,
+        "width": 166,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        512,
+        -1152
+      ],
+      "typeVersion": 1,
+      "id": "e8bdda07-409d-4a44-83f1-2e43b4014033",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const crypto = require('crypto');\n\n/*\n * PREPARAR FILA POST\n *\n * Este nodo guarda en la pestaña Posts los datos necesarios\n * para no repetir el mismo post en futuras ejecuciones.\n *\n * IMPORTANTE:\n * Si post_hash o post_id vienen vacíos, los calculamos aquí\n * usando la URL del post.\n */\n\nconst meta = $('Preparar HTML PDF').item.json;\n\nfunction hash(value = '') {\n  return crypto\n    .createHash('sha256')\n    .update(String(value))\n    .digest('hex')\n    .slice(0, 24);\n}\n\nfunction cleanUrl(url = '') {\n  url = String(url || '').trim();\n\n  try {\n    const u = new URL(url);\n\n    // Quitamos parámetros variables de Facebook\n    u.searchParams.delete('__cft__[0]');\n    u.searchParams.delete('__tn__');\n    u.searchParams.delete('mibextid');\n    u.searchParams.delete('ref');\n    u.searchParams.delete('refid');\n    u.searchParams.delete('locale');\n\n    return u.origin + u.pathname + (u.search ? u.search : '');\n  } catch {\n    return url.split('?')[0];\n  }\n}\n\nfunction getStablePostId(url = '') {\n  url = String(url || '');\n\n  // Reels: /reel/967376516157967/\n  let m = url.match(/\\/reel\\/(\\d+)/i);\n  if (m) return `reel_${m[1]}`;\n\n  // Fotos: fbid=106748115604529\n  m = url.match(/[?&]fbid=(\\d+)/i);\n  if (m) return `fbid_${m[1]}`;\n\n  // Posts numéricos: /posts/123456789\n  m = url.match(/\\/posts\\/(\\d+)/i);\n  if (m) return `post_${m[1]}`;\n\n  // Posts pfbid: /posts/pfbid0Y...\n  m = url.match(/\\/posts\\/([^/?#]+)/i);\n  if (m) return `post_${m[1]}`;\n\n  // Stories\n  m = url.match(/[?&]story_fbid=(\\d+)/i);\n  if (m) return `story_${m[1]}`;\n\n  // Fallback estable\n  return cleanUrl(url);\n}\n\nconst postUrl = cleanUrl(meta.post_url || '');\nconst postId = String(meta.post_id || getStablePostId(postUrl)).trim();\nconst postHash = String(meta.post_hash || hash(postId)).trim();\n\nreturn {\n  json: {\n    cuenta: meta.cuenta || meta.nombre || 'Facebook',\n\n    post_url: postUrl,\n    post_hash: postHash,\n    post_id: postId,\n\n    fecha_detectado:\n      meta.fecha_detectado ||\n      meta.fecha ||\n      new Date().toISOString().slice(0, 10),\n\n    texto: String(meta.texto_limpio || meta.texto || '').trim(),\n\n    imagen_url: String(meta.imagen_url || '').trim(),\n\n    procesado: 'SI',\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3584,
+        -880
+      ],
+      "id": "483fd239-2da0-40c6-b426-30200284fdf2",
+      "name": "Preparar fila Post"
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Posts existentes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Posts existentes": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "Preparar URL Scrape",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar URL Scrape": {
+      "main": [
+        [
+          {
+            "node": "Añadir cookies FB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Browserless Scraper": {
+      "main": [
+        [
+          {
+            "node": "Extraer posts Facebook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer posts Facebook": {
+      "main": [
+        [
+          {
+            "node": "Marcar posts nuevos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar posts nuevos": {
+      "main": [
+        [
+          {
+            "node": "IF - Post nuevo OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Post nuevo OK": {
+      "main": [
+        [
+          {
+            "node": "Preparar prompt IA",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar actualización fallo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar prompt IA": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Preparar fila Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar fila Resultado": {
+      "main": [
+        [
+          {
+            "node": "Append row in Resultados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in Resultados": {
+      "main": [
+        [
+          {
+            "node": "Preparar HTML PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar HTML PDF": {
+      "main": [
+        [
+          {
+            "node": "Crear PDF Browserless",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear PDF Browserless": {
+      "main": [
+        [
+          {
+            "node": "Renombrar PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Renombrar PDF": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send an Email": {
+      "main": [
+        [
+          {
+            "node": "Preparar fila Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar post en Posts": {
+      "main": [
+        [
+          {
+            "node": "Preparar actualización Cuenta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar actualización Cuenta": {
+      "main": [
+        [
+          {
+            "node": "Update row in Cuentas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar actualización fallo": {
+      "main": [
+        [
+          {
+            "node": "Update fallo en Cuentas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Añadir cookies FB": {
+      "main": [
+        [
+          {
+            "node": "Browserless Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Posts existentes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar fila Post": {
+      "main": [
+        [
+          {
+            "node": "Guardar post en Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": {
+    "node:Schedule Trigger": {
+      "recurrenceRules": [
+        20
+      ]
+    }
+  },
+  "meta": null,
+  "pinData": {},
+  "versionId": "95170505-0b8d-4d75-ae48-80bb8f7174f1",
+  "activeVersionId": null,
+  "versionCounter": 283,
+  "triggerCount": 1,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-05-13T20:39:25.429Z",
+      "createdAt": "2026-05-13T20:39:25.429Z",
+      "role": "workflow:owner",
+      "workflowId": "cBhmwwAGI29LuJeH",
+      "projectId": "Oydmi9LKo6hnXrnp",
+      "project": {
+        "updatedAt": "2026-04-20T15:31:20.051Z",
+        "createdAt": "2026-04-20T15:12:06.805Z",
+        "id": "Oydmi9LKo6hnXrnp",
+        "name": "Ximo Soler <grafico@addoimpresores.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "3068be6c-0e51-439e-8bf9-e72776c398e1"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": "Version 95170505",
+    "description": ""
+  }
+}

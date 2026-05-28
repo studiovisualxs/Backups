@@ -1,0 +1,282 @@
+{
+  "updatedAt": "2026-05-01T12:23:45.084Z",
+  "createdAt": "2026-04-28T10:28:06.335Z",
+  "id": "0rozTuxq7garvJw6",
+  "name": "Backup",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "On clicking 'execute'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "position": [
+        -272,
+        256
+      ],
+      "typeVersion": 1,
+      "id": "db929b4a-8ef5-4670-8811-feee9ff2e286"
+    },
+    {
+      "parameters": {
+        "command": "set -e\n\nREPO_DIR=\"/home/node/repo\"\nBACKUP_DIR=\"$REPO_DIR/${N8N_HOST:-n8n}/credentials\"\n\nmkdir -p \"$BACKUP_DIR\"\n\necho \"Exportando credenciales a: $BACKUP_DIR\"\n\nn8n export:credentials \\\n  --backup \\\n  --output \"$BACKUP_DIR\""
+      },
+      "name": "Export Credentials",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [
+        624,
+        160
+      ],
+      "typeVersion": 1,
+      "id": "72ab637b-ea5e-4b5e-8f9d-984d5a162eb7"
+    },
+    {
+      "parameters": {
+        "command": "set -e\n\ngit -C /home/node/repo add .\ngit -C /home/node/repo status"
+      },
+      "name": "git add",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [
+        848,
+        160
+      ],
+      "typeVersion": 1,
+      "id": "9888caaa-fcf7-4656-92a3-a807d9277131"
+    },
+    {
+      "parameters": {
+        "command": "=cd /home/node/repo\n\ngit commit -m \"Auto backup - ${N8N_HOST:-n8n} ($(date -Iseconds))\" || echo \"No hay cambios\""
+      },
+      "name": "git commit",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [
+        1072,
+        160
+      ],
+      "typeVersion": 1,
+      "id": "c58e7dc0-f22c-409e-bef4-341a5866face"
+    },
+    {
+      "parameters": {
+        "command": "=set -e\ngit -C /home/node/repo push origin main"
+      },
+      "name": "git push",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [
+        1296,
+        160
+      ],
+      "typeVersion": 1,
+      "id": "3e4e8d64-f368-45b0-8253-4d8adae68fa1"
+    },
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyX",
+              "value": 12
+            }
+          ]
+        }
+      },
+      "name": "Cron",
+      "type": "n8n-nodes-base.cron",
+      "position": [
+        -272,
+        64
+      ],
+      "typeVersion": 1,
+      "id": "570f75b2-2b01-4b23-94da-b5e929af63fa"
+    },
+    {
+      "parameters": {
+        "command": "set -e\n\nREPO_DIR=\"/home/node/repo\"\nBACKUP_DIR=\"$REPO_DIR/${N8N_HOST:-n8n}/workflows\"\n\nmkdir -p \"$BACKUP_DIR\"\n\ngit -C \"$REPO_DIR\" pull || true\n\necho \"Exportando workflows a: $BACKUP_DIR\"\n\nn8n export:workflow \\\n  --backup \\\n  --output \"$BACKUP_DIR\""
+      },
+      "name": "Export Workflows",
+      "type": "n8n-nodes-base.executeCommand",
+      "position": [
+        400,
+        160
+      ],
+      "typeVersion": 1,
+      "id": "c769fc03-14c4-4e3c-8a77-f65ce7ef4dce"
+    },
+    {
+      "parameters": {
+        "command": "=set -e\n\nREPO_DIR=\"/home/node/repo\"\n\nif [ ! -d \"$REPO_DIR/.git\" ]; then\n  git clone \"https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@${GITHUB_REPO}\" \"$REPO_DIR\"\nfi\n\ngit config --global user.email \"${GIT_AUTHOR_EMAIL}\"\ngit config --global user.name \"${GIT_AUTHOR_NAME}\"\ngit config --global --add safe.directory \"$REPO_DIR\"\n\ngit -C \"$REPO_DIR\" remote set-url origin \"https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@${GITHUB_REPO}\""
+      },
+      "id": "3852ab8e-6f07-47e9-bba1-e7690867367a",
+      "name": "Configura repo",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        176,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "fields": {
+          "values": [
+            {
+              "name": "nombre",
+              "stringValue": "studiovisualxs"
+            },
+            {
+              "name": "email",
+              "stringValue": "stuviovisual.xs@gmail.com"
+            },
+            {
+              "name": "repo",
+              "stringValue": "github.com/studiovisualxs/Backups"
+            },
+            {
+              "name": "github_username",
+              "stringValue": "studiovisualxs"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b0b17089-e82f-4820-8a8d-dba33fb0cf0a",
+      "name": "Configurar",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        -48,
+        160
+      ]
+    }
+  ],
+  "connections": {
+    "On clicking 'execute'": {
+      "main": [
+        [
+          {
+            "node": "Configurar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cron": {
+      "main": [
+        [
+          {
+            "node": "Configurar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configurar": {
+      "main": [
+        [
+          {
+            "node": "Configura repo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configura repo": {
+      "main": [
+        [
+          {
+            "node": "Export Workflows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Export Workflows": {
+      "main": [
+        [
+          {
+            "node": "Export Credentials",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Export Credentials": {
+      "main": [
+        [
+          {
+            "node": "git add",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "git add": {
+      "main": [
+        [
+          {
+            "node": "git commit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "git commit": {
+      "main": [
+        [
+          {
+            "node": "git push",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "UslOMwwiH98sBT9V",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "8a227853-244d-41f8-9a66-122012a8b603",
+  "activeVersionId": "8a227853-244d-41f8-9a66-122012a8b603",
+  "versionCounter": 138,
+  "triggerCount": 1,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-04-28T10:28:06.335Z",
+      "createdAt": "2026-04-28T10:28:06.335Z",
+      "role": "workflow:owner",
+      "workflowId": "0rozTuxq7garvJw6",
+      "projectId": "Oydmi9LKo6hnXrnp",
+      "project": {
+        "updatedAt": "2026-04-20T15:31:20.051Z",
+        "createdAt": "2026-04-20T15:12:06.805Z",
+        "id": "Oydmi9LKo6hnXrnp",
+        "name": "Ximo Soler <grafico@addoimpresores.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "3068be6c-0e51-439e-8bf9-e72776c398e1"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": "Version 8a227853",
+    "description": ""
+  }
+}

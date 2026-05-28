@@ -1,0 +1,603 @@
+{
+  "updatedAt": "2026-05-28T14:40:51.648Z",
+  "createdAt": "2026-05-09T10:32:21.122Z",
+  "id": "xwmcCxJNeoC7vxM4",
+  "name": "Alertas PLACSP - DIARIO AUTOMATICO",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 15
+            }
+          ]
+        }
+      },
+      "id": "c0fd7e89-23f1-48bb-9a61-e637278b52b5",
+      "name": "Cada día",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        1328,
+        1120
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "d24179a2-582f-4baf-b6e2-f837c8cca9e3",
+      "name": "Ejecutar manual",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        1328,
+        1312
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "1v3NHRruLYk3CmArePxKXpfAp2Zhozvq-Jg8X4tjM3lc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "config",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "07c94d0a-93e0-464d-bb5a-4c0e9a8d0c71",
+      "name": "Leer configuración",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1552,
+        1216
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "WqqKIfHDEaQErgAl",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json);\n\nconst config = {};\n\nfor (const row of rows) {\n  const key = String(row.campo || '').trim();\n  const value = row.valor ?? '';\n\n  if (key) config[key] = value;\n}\n\nfunction splitList(value) {\n  return String(value || '')\n    .split(',')\n    .map(v => v.trim())\n    .filter(Boolean);\n}\n\nconst feedUrlAuto =\n  'https://contrataciondelsectorpublico.gob.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3.atom';\n\nreturn [{\n  json: {\n    feed_url: config.feed_url && String(config.feed_url).trim()\n      ? String(config.feed_url).trim()\n      : feedUrlAuto,\n\n    keywords: splitList(config.keywords),\n    keywords_fuertes: splitList(config.keywords_fuertes),\n    exclude_keywords: splitList(config.exclude_keywords),\n    provincias: splitList(config.provincia),\n    cpvs: splitList(config.cpv),\n\n    importe_min: Number(config.importe_min || 0),\n    email_destino: String(config.email_destino || '').trim(),\n    max_resultados: Number(config.max_resultados || 25),\n    solo_abiertas: String(config.solo_abiertas || '').toLowerCase() === 'sí',\n    frecuencia: String(config.frecuencia || 'diaria').trim()\n  }\n}];"
+      },
+      "id": "5de22481-20a3-4b2f-992b-f12a9650c069",
+      "name": "Normalizar configuración",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1776,
+        1216
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.feed_url}}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 300000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2000,
+        1216
+      ],
+      "id": "548892af-10ba-45b7-8e2b-4765c889e7df",
+      "name": "Descargar índice ATOM",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.xml",
+      "typeVersion": 1,
+      "position": [
+        2224,
+        1216
+      ],
+      "id": "2428c870-3fc9-4a91-9eaf-8c76d083591b",
+      "name": "XML índice"
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Normalizar configuración').first().json;\nconst allInputs = $input.all();\n\nconst keywords = config.keywords || [];\nconst keywordsFuertes = config.keywords_fuertes || [];\nconst excludeKeywords = config.exclude_keywords || [];\nconst provincias = config.provincias || [];\nconst cpvs = config.cpvs || [];\nconst maxResultados = Number(config.max_resultados || 100);\n\nfunction textOf(value) {\n  if (!value) return '';\n  if (typeof value === 'string') return value;\n  if (value._) return value._;\n  if (value['#text']) return value['#text'];\n  return JSON.stringify(value);\n}\n\nfunction normalizeText(value) {\n  return String(value || '')\n    .toLowerCase()\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '');\n}\n\nfunction normalizeCpv(value) {\n  return String(value || '').replace(/[^0-9]/g, '');\n}\n\nfunction getEntries(xml) {\n  const feed = xml.feed || xml;\n  let entries = feed.entry || [];\n  if (!entries) return [];\n  if (!Array.isArray(entries)) entries = [entries];\n  return entries;\n}\n\nfunction countMatches(texto, lista) {\n  return lista.filter(k => texto.includes(normalizeText(k))).length;\n}\n\nconst resultados = [];\n\nfor (const input of allInputs) {\n  const entries = getEntries(input.json);\n\n  for (const entry of entries) {\n    const title = textOf(entry.title);\n    const summary = textOf(entry.summary);\n    const id = textOf(entry.id);\n    const updated = textOf(entry.updated);\n\n    let link = '';\n    if (Array.isArray(entry.link)) {\n      const alt = entry.link.find(l => l.rel === 'alternate') || entry.link[0];\n      link = alt?.href || '';\n    } else if (entry.link) {\n      link = entry.link.href || '';\n    }\n\n    const texto = normalizeText(JSON.stringify(entry));\n    const textoCpv = normalizeCpv(JSON.stringify(entry));\n\n    const matchesNormales = countMatches(texto, keywords);\n    const matchesFuertes = countMatches(texto, keywordsFuertes);\n\n    const pasaKeyword =\n      matchesFuertes >= 1 ||\n      matchesNormales >= 2 ||\n      keywords.length === 0;\n\n    const pasaExclusion =\n      excludeKeywords.length === 0 ||\n      countMatches(texto, excludeKeywords) === 0;\n\n    const pasaProvincia =\n      provincias.length === 0 ||\n      provincias.some(p => texto.includes(normalizeText(p)));\n\n    const pasaCpv =\n      cpvs.length === 0 ||\n      cpvs.some(cpv => {\n        const cpvNormalizado = normalizeCpv(cpv);\n        return cpvNormalizado && textoCpv.includes(cpvNormalizado);\n      });\n\n    if (pasaKeyword && pasaExclusion && pasaProvincia && pasaCpv) {\n      resultados.push({\n        id,\n        title,\n        summary,\n        updated,\n        link,\n        matches_normales: matchesNormales,\n        matches_fuertes: matchesFuertes,\n      });\n    }\n  }\n}\n\nconst unicos = Array.from(\n  new Map(resultados.map(r => [r.id || r.link || r.title, r])).values()\n);\n\nconst salida = unicos.slice(0, maxResultados);\n\nif (salida.length === 0) {\n  return [{\n    json: {\n      id: 'sin-resultados',\n      title: 'No se encontraron licitaciones con los filtros actuales',\n      summary: 'Prueba ampliando keywords, quitando CPV o ajustando keywords_fuertes.',\n      updated: new Date().toISOString(),\n      link: '',\n    }\n  }];\n}\n\nreturn salida.map(r => ({ json: r }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3120,
+        1216
+      ],
+      "id": "218b142e-3c5e-4b5b-a21d-37931b19fcf7",
+      "name": "Filtrar licitaciones"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst config = $('Normalizar configuración').first().json;\n\nconst rows = items.map((item, index) => {\n  const r = item.json;\n  return `\n    <tr>\n      <td>${index + 1}</td>\n      <td><strong>${r.title || ''}</strong><br>${r.summary || ''}</td>\n      <td><a href=\"${r.link || '#'}\">Ver licitación</a></td>\n      <td>${r.updated || ''}</td>\n    </tr>\n  `;\n}).join('');\n\nconst html = `\n<h2>Nuevas licitaciones encontradas</h2>\n<p>Se han encontrado <strong>${items.length}</strong> licitaciones.</p>\n\n<table border=\"1\" cellpadding=\"8\" cellspacing=\"0\">\n  <thead>\n    <tr>\n      <th>#</th>\n      <th>Licitación</th>\n      <th>Enlace</th>\n      <th>Fecha</th>\n    </tr>\n  </thead>\n  <tbody>\n    ${rows}\n  </tbody>\n</table>\n`;\n\nreturn [{\n  json: {\n    email_destino: config.email_destino,\n    subject: `Alertas licitaciones: ${items.length} resultados`,\n    html,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3792,
+        1312
+      ],
+      "id": "9cf3a5ab-acb6-47a6-8a92-fb959bfa51db",
+      "name": "Preparar email"
+    },
+    {
+      "parameters": {
+        "fromEmail": "studiovisual.xs@gmail.com",
+        "toEmail": "={{$json.email_destino}}",
+        "subject": "={{$json.subject}}",
+        "html": "={{$json.html}}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        4016,
+        1312
+      ],
+      "id": "ff087cdb-acf0-4057-90c7-b7c24d05a37a",
+      "name": "Send an Email",
+      "webhookId": "416d9d28-4741-4a5f-93b1-3bed201d5ffe",
+      "credentials": {
+        "smtp": {
+          "id": "7s7pTTjulVSpVWUt",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "1v3NHRruLYk3CmArePxKXpfAp2Zhozvq-Jg8X4tjM3lc",
+          "mode": "list",
+          "cachedResultName": "plantilla-alertas-licitaciones-n8n",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1v3NHRruLYk3CmArePxKXpfAp2Zhozvq-Jg8X4tjM3lc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 458104394,
+          "mode": "list",
+          "cachedResultName": "enviadas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1v3NHRruLYk3CmArePxKXpfAp2Zhozvq-Jg8X4tjM3lc/edit#gid=458104394"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3344,
+        1216
+      ],
+      "id": "b7e884d5-ff96-4eca-a83d-7dcbd1423d3c",
+      "name": "Leer enviadas",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleApi": {
+          "id": "WqqKIfHDEaQErgAl",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const nuevas = $('Filtrar licitaciones').all();\nconst enviadas = $input.all();\n\nconst idsEnviados = new Set(\n  enviadas\n    .map(i => i.json.id_licitacion)\n    .filter(Boolean)\n);\n\nconst resultado = nuevas.filter(item => {\n  const id = item.json.id;\n  return id && !idsEnviados.has(id);\n});\n\nreturn resultado;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3568,
+        1216
+      ],
+      "id": "7a414761-0211-4f8f-bdaf-9a41c3bfca69",
+      "name": "Quitar duplicados"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1v3NHRruLYk3CmArePxKXpfAp2Zhozvq-Jg8X4tjM3lc",
+          "mode": "list",
+          "cachedResultName": "plantilla-alertas-licitaciones-n8n",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1v3NHRruLYk3CmArePxKXpfAp2Zhozvq-Jg8X4tjM3lc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 458104394,
+          "mode": "list",
+          "cachedResultName": "enviadas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1v3NHRruLYk3CmArePxKXpfAp2Zhozvq-Jg8X4tjM3lc/edit#gid=458104394"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id_licitacion": "={{$json.id}}",
+            "fecha_envio": "={{$now}}",
+            "titulo": "={{$json.title}}",
+            "enlace": "={{$json.link}}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "id_licitacion",
+              "displayName": "id_licitacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha_envio",
+              "displayName": "fecha_envio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "titulo",
+              "displayName": "titulo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "enlace",
+              "displayName": "enlace",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3792,
+        1120
+      ],
+      "id": "36b38c25-4e5b-42ed-9e45-4aa18f294f44",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleApi": {
+          "id": "WqqKIfHDEaQErgAl",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Normalizar configuración').first().json;\nconst xml = $input.first().json;\n\nconst feed = xml.feed || xml;\n\nfunction arr(v) {\n  if (!v) return [];\n  return Array.isArray(v) ? v : [v];\n}\n\nfunction getHref(link) {\n  if (!link) return '';\n  return link.href || link['@_href'] || link.$?.href || '';\n}\n\nconst links = [\n  ...arr(feed.link),\n  ...arr(feed.entry).flatMap(e => arr(e.link))\n];\n\nlet candidates = links\n  .map(getHref)\n  .filter(Boolean)\n  .filter(h => /licitacionesPerfilesContratanteCompleto3_\\d{8}_\\d{6}\\.atom/i.test(h));\n\ncandidates = [...new Set(candidates)];\n\nif (candidates.length === 0) {\n  throw new Error('No encontré enlaces .atom diarios dentro del índice. Revisa que feed_url apunte al .atom general, no a un ZIP ni a un .atom diario fijo.');\n}\n\nfunction score(url) {\n  const m = url.match(/_(\\d{8})_(\\d{6})\\.atom/i);\n  return m ? `${m[1]}${m[2]}` : '';\n}\n\ncandidates.sort((a, b) => score(b).localeCompare(score(a)));\n\nlet latest = candidates[0];\n\nif (!latest.startsWith('http')) {\n  latest = `https://contrataciondelsectorpublico.gob.es/sindicacion/sindicacion_643/${latest.replace(/^\\/+/, '')}`;\n}\n\nreturn [{\n  json: {\n    ...config,\n    feed_url_indice: config.feed_url,\n    feed_url: latest,\n    feed_atom_diario_detectado: latest,\n    atom_candidates_found: candidates.length,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2448,
+        1216
+      ],
+      "id": "62a5593e-caed-425e-8d28-3162610f6bdc",
+      "name": "Elegir último ATOM diario"
+    },
+    {
+      "parameters": {
+        "url": "={{$json.feed_url}}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 300000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2672,
+        1216
+      ],
+      "id": "076b88ea-e0a4-4513-ac53-2bf261dc7b0e",
+      "name": "Descargar ATOM diario",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.xml",
+      "typeVersion": 1,
+      "position": [
+        2896,
+        1216
+      ],
+      "id": "72ef31ea-b2d5-4e54-bc82-1294fc6cfe4c",
+      "name": "XML licitaciones"
+    },
+    {
+      "parameters": {
+        "content": "Versión ligera: usa el índice .atom, detecta automáticamente el último .atom diario y evita descargar ZIP mensual.",
+        "height": 96,
+        "width": 320
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2048,
+        1072
+      ],
+      "id": "43f32a0f-2a67-4d74-a63d-2b2a09e7e720",
+      "name": "Nota feed diario automático"
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Normalizar configuración').first().json;\nconst allInputs = $input.all();\n\nconst keywords = config.keywords || [];\nconst excludeKeywords = config.exclude_keywords || [];\nconst provincias = config.provincias || [];\nconst cpvs = config.cpvs || [];\nconst maxResultados = Number(config.max_resultados || 100);\n\nfunction textOf(value) {\n  if (!value) return '';\n  if (typeof value === 'string') return value;\n  if (value._) return value._;\n  if (value['#text']) return value['#text'];\n  return JSON.stringify(value);\n}\n\nfunction normalizeCpv(value) {\n  return String(value || '')\n    .toLowerCase()\n    .replace(/[^0-9]/g, '');\n}\n\nfunction getEntries(xml) {\n  const feed = xml.feed || xml;\n  let entries = feed.entry || [];\n\n  if (!entries) return [];\n  if (!Array.isArray(entries)) entries = [entries];\n\n  return entries;\n}\n\nconst resultados = [];\n\nfor (const input of allInputs) {\n  const entries = getEntries(input.json);\n\n  for (const entry of entries) {\n    const title = textOf(entry.title);\n    const summary = textOf(entry.summary);\n    const id = textOf(entry.id);\n    const updated = textOf(entry.updated);\n    const content = textOf(entry.content);\n\n    let link = '';\n\n    if (Array.isArray(entry.link)) {\n      const alt = entry.link.find(l => l.rel === 'alternate') || entry.link[0];\n      link = alt?.href || '';\n    } else if (entry.link) {\n      link = entry.link.href || '';\n    }\n\n    const texto = JSON.stringify(entry).toLowerCase();\n    const textoCpvNormalizado = normalizeCpv(texto);\n\n    const pasaKeyword =\n      keywords.length === 0 ||\n      keywords.some(k => texto.includes(String(k).toLowerCase()));\n\n    const pasaExclusion =\n      excludeKeywords.length === 0 ||\n      !excludeKeywords.some(k => texto.includes(String(k).toLowerCase()));\n\n    const pasaProvincia =\n      provincias.length === 0 ||\n      provincias.some(p => texto.includes(String(p).toLowerCase()));\n\n    const pasaCpv =\n      cpvs.length === 0 ||\n      cpvs.some(cpv => {\n        const cpvNormalizado = normalizeCpv(cpv);\n        return cpvNormalizado && textoCpvNormalizado.includes(cpvNormalizado);\n      });\n\n    if (pasaKeyword && pasaExclusion && pasaProvincia && pasaCpv) {\n      resultados.push({\n        id,\n        title,\n        summary,\n        updated,\n        link,\n      });\n    }\n  }\n}\n\nconst unicos = Array.from(\n  new Map(\n    resultados.map(r => [\n      r.id || r.link || r.title,\n      r,\n    ])\n  ).values()\n);\n\nconst salida = unicos.slice(0, maxResultados);\n\nif (salida.length === 0) {\n  return [{\n    json: {\n      id: 'sin-resultados',\n      title: 'No se encontraron licitaciones con los filtros actuales',\n      summary: 'Prueba ampliando keywords, quitando CPV o dejando provincia vacía.',\n      updated: new Date().toISOString(),\n      link: '',\n    }\n  }];\n}\n\nreturn salida.map(r => ({ json: r }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3120,
+        720
+      ],
+      "id": "a43b3e26-4c77-4998-b58e-f81c07fa9a5d",
+      "name": "Filtrar licitaciones1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json);\n\nconst config = {};\n\nfor (const row of rows) {\n  const key = String(row.campo || '').trim();\n  const value = row.valor ?? '';\n\n  if (key) config[key] = value;\n}\n\nfunction splitList(value) {\n  return String(value || '')\n    .split(',')\n    .map(v => v.trim())\n    .filter(Boolean);\n}\n\nconst now = new Date();\nconst yyyy = now.getFullYear();\nconst mm = String(now.getMonth() + 1).padStart(2, '0');\n\nconst feedUrlAuto = 'https://contrataciondelsectorpublico.gob.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3.atom';\n\nreturn [{\n  json: {\n    feed_url: config.feed_url && String(config.feed_url).trim()\n      ? String(config.feed_url).trim()\n      : feedUrlAuto,\n\n    keywords: splitList(config.keywords),\n    exclude_keywords: splitList(config.exclude_keywords),\n    provincias: splitList(config.provincia),\n    cpvs: splitList(config.cpv),\n\n    importe_min: Number(config.importe_min || 0),\n    email_destino: String(config.email_destino || '').trim(),\n    max_resultados: Number(config.max_resultados || 25),\n    solo_abiertas: String(config.solo_abiertas || '').toLowerCase() === 'sí',\n    frecuencia: String(config.frecuencia || 'diaria').trim()\n  }\n}];"
+      },
+      "id": "e340cbfd-798f-4432-98c8-85bac0616f0e",
+      "name": "Normalizar configuración1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1776,
+        704
+      ]
+    }
+  ],
+  "connections": {
+    "Cada día": {
+      "main": [
+        [
+          {
+            "node": "Leer configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ejecutar manual": {
+      "main": [
+        [
+          {
+            "node": "Leer configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer configuración": {
+      "main": [
+        [
+          {
+            "node": "Normalizar configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar configuración": {
+      "main": [
+        [
+          {
+            "node": "Descargar índice ATOM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Descargar índice ATOM": {
+      "main": [
+        [
+          {
+            "node": "XML índice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "XML índice": {
+      "main": [
+        [
+          {
+            "node": "Elegir último ATOM diario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar licitaciones": {
+      "main": [
+        [
+          {
+            "node": "Leer enviadas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar email": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer enviadas": {
+      "main": [
+        [
+          {
+            "node": "Quitar duplicados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quitar duplicados": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Preparar email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Elegir último ATOM diario": {
+      "main": [
+        [
+          {
+            "node": "Descargar ATOM diario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Descargar ATOM diario": {
+      "main": [
+        [
+          {
+            "node": "XML licitaciones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "XML licitaciones": {
+      "main": [
+        [
+          {
+            "node": "Filtrar licitaciones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "UslOMwwiH98sBT9V",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": {
+    "node:Cada día": {
+      "recurrenceRules": [
+        0
+      ]
+    }
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "b1237917-a104-4e2f-972f-6a7b63a315ee",
+  "activeVersionId": "b1237917-a104-4e2f-972f-6a7b63a315ee",
+  "versionCounter": 215,
+  "triggerCount": 1,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-05-09T10:32:21.122Z",
+      "createdAt": "2026-05-09T10:32:21.122Z",
+      "role": "workflow:owner",
+      "workflowId": "xwmcCxJNeoC7vxM4",
+      "projectId": "Oydmi9LKo6hnXrnp",
+      "project": {
+        "updatedAt": "2026-04-20T15:31:20.051Z",
+        "createdAt": "2026-04-20T15:12:06.805Z",
+        "id": "Oydmi9LKo6hnXrnp",
+        "name": "Ximo Soler <grafico@addoimpresores.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "3068be6c-0e51-439e-8bf9-e72776c398e1"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": "Version b1237917",
+    "description": ""
+  }
+}

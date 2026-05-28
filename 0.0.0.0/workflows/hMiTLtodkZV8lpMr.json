@@ -1,0 +1,563 @@
+{
+  "updatedAt": "2026-05-08T06:59:59.269Z",
+  "createdAt": "2026-04-21T14:36:32.081Z",
+  "id": "hMiTLtodkZV8lpMr",
+  "name": "Asistente WhatsApp+Trello v5 Mejorado ListaBlanca Filtros Ayuda",
+  "description": null,
+  "active": false,
+  "isArchived": true,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "asistente-whatsapp",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -448,
+        -192
+      ],
+      "id": "5f18d29c-d78f-4fe5-a38b-af358b20814a",
+      "name": "Webhook",
+      "webhookId": "faa7127c-b4aa-4a3d-866e-14efb0c2abb8"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "37b05a3a-f5eb-4f99-9c97-464f1b9d0304",
+              "name": "boardId",
+              "value": "5ff2d7873b288c34fbc1b918",
+              "type": "string"
+            },
+            {
+              "id": "27a3f840-ec48-425a-a6b0-16c8e0d972cc",
+              "name": "allowedGroupJid",
+              "value": "120363425302477785@g.us",
+              "type": "string"
+            },
+            {
+              "id": "wl-allowed-participants",
+              "name": "allowedParticipantsCsv",
+              "value": "REEMPLAZAR_1@s.whatsapp.net,REEMPLAZAR_2@s.whatsapp.net",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -224,
+        -192
+      ],
+      "id": "0b725bb5-9974-463a-95f6-8086531f4ead",
+      "name": "Configuración"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $(\"Webhook\").first().json;\nconst cfg = $(\"Configuración\").first().json;\n\nconst data = raw.body?.body?.data || raw.body?.data || {};\nconst remoteJid = data.key?.remoteJid || '';\nconst participant = data.key?.participant || '';\nconst isGroup = String(remoteJid).endsWith('@g.us');\n\nconst message = data.message || {};\n\nconst messageText =\n  message?.conversation ||\n  message?.extendedTextMessage?.text ||\n  message?.imageMessage?.caption ||\n  message?.videoMessage?.caption ||\n  raw.body?.body?.body?.test ||\n  '';\n\nconst originalQuestion = String(messageText || '').trim();\n\n// Acepta /tr, tr, /TR, TR, etc.\nconst hasGroupPrefix = /^(?:\\/tr\\b|tr\\b)/i.test(originalQuestion);\n\nconst normalize = (value = '') =>\n  String(value)\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '')\n    .toLowerCase()\n    .trim();\n\nconst normalizedOriginal = normalize(originalQuestion);\n\nconst mentionedJid =\n  message?.extendedTextMessage?.contextInfo?.mentionedJid ||\n  message?.imageMessage?.contextInfo?.mentionedJid ||\n  message?.videoMessage?.contextInfo?.mentionedJid ||\n  [];\n\nconst mentionText =\n  message?.extendedTextMessage?.contextInfo?.participant ||\n  message?.extendedTextMessage?.contextInfo?.stanzaId ||\n  '';\n\nconst hasMention =\n  (Array.isArray(mentionedJid) && mentionedJid.length > 0) ||\n  /@\\d{5,}/.test(originalQuestion) ||\n  Boolean(mentionText);\n\nconst mentionsTrelloWord = /\\btrello\\b/i.test(originalQuestion);\n\nconst allowedGroupJid = cfg.allowedGroupJid || 'REEMPLAZAR_POR_TU_GRUPO@g.us';\nconst boardId = cfg.boardId || '5ff2d7873b288c34fbc1b918';\nconst allowedParticipantsCsv = cfg.allowedParticipantsCsv || '';\n\nconst allowedParticipants = String(allowedParticipantsCsv)\n  .split(/[,;\\n]/)\n  .map(item => item.trim())\n  .filter(Boolean);\n\nconst hasWhitelist = allowedParticipants.length > 0 &&\n  !allowedParticipants.some(item => item.startsWith('REEMPLAZAR_'));\n\nconst normalizedAllowedParticipants = allowedParticipants.map(item => item.toLowerCase());\nconst normalizedParticipant = String(participant || '').toLowerCase();\n\nconst isAllowedGroup = isGroup && remoteJid === allowedGroupJid;\nconst isAllowedParticipant = !hasWhitelist || normalizedAllowedParticipants.includes(normalizedParticipant);\nconst likelyForBot = mentionsTrelloWord || hasMention;\n\n// Solo trabaja dentro del grupo autorizado, con prefijo flexible y usuario permitido.\nconst shouldRespond = isAllowedGroup && hasGroupPrefix && isAllowedParticipant;\n\n// Solo avisa dentro del grupo autorizado si parece que hablaban con el bot y sí está autorizado.\nconst shouldWarn = isAllowedGroup && !hasGroupPrefix && likelyForBot && isAllowedParticipant;\n\n// Usuario no autorizado escribiendo prefijo en el grupo correcto.\nconst shouldUnauthorized = isAllowedGroup && hasGroupPrefix && !isAllowedParticipant;\n\nconst question = shouldRespond\n  ? originalQuestion.replace(/^(?:\\/tr\\b|tr\\b)\\s*/i, '').trim()\n  : originalQuestion;\n\nconst replyTarget = isGroup ? remoteJid : String(remoteJid || '').split('@')[0];\n\nreturn [\n  {\n    json: {\n      ...raw,\n      boardId,\n      allowedGroupJid,\n      allowedParticipantsCsv,\n      allowedParticipants,\n      hasWhitelist,\n      originalQuestion,\n      question,\n      normalizedQuestion: normalize(question),\n      normalizedOriginal,\n      remoteJid,\n      participant,\n      isGroup,\n      isAllowedGroup,\n      isAllowedParticipant,\n      shouldRespond,\n      shouldWarn,\n      shouldUnauthorized,\n      usedPrefix: hasGroupPrefix,\n      hasMention,\n      mentionsTrelloWord,\n      replyTarget,\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -192
+      ],
+      "id": "0bcfeeed-a0c8-48b6-9322-a7d22494f9bf",
+      "name": "Normalizar entrada"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.shouldRespond }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        224,
+        -192
+      ],
+      "id": "e389f281-b485-4bf9-924c-554f5df8fc8e",
+      "name": "¿Procesar mensaje?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.shouldWarn || $json.shouldUnauthorized }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        896,
+        96
+      ],
+      "id": "a7bb4fdd-d2d9-4f4f-a173-37995f151c02",
+      "name": "¿Avisar uso /tr?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const req = $(\"Normalizar entrada\").first().json;\n\nlet output = '';\n\nif (req.shouldUnauthorized) {\n  output = 'No tienes permiso para usar este asistente en este grupo.';\n} else {\n  output = `Para usar el asistente en este grupo, empieza con /tr o tr.\\n\\nPrueba por ejemplo:\\n- tr ayuda\\n- tr listas\\n- tr tarjetas en progreso con etiqueta urgente\\n- tr tarjetas que vencen hoy`;\n}\n\nreturn [\n  {\n    json: {\n      number: req.replyTarget,\n      output,\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ],
+      "id": "08333075-6faa-4506-bc94-1077f0f279d2",
+      "name": "Aviso usar /tr"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        192
+      ],
+      "id": "4ea65e23-f2bb-4d96-a6a8-f693409a0435",
+      "name": "Ignorar mensaje"
+    },
+    {
+      "parameters": {
+        "resource": "board",
+        "operation": "get",
+        "id": {
+          "__rl": true,
+          "value": "={{ $(\"Configuración\").first().json.boardId }}",
+          "mode": "id"
+        },
+        "additionalFields": {
+          "fields": "all"
+        }
+      },
+      "type": "n8n-nodes-base.trello",
+      "typeVersion": 1,
+      "position": [
+        448,
+        -384
+      ],
+      "id": "7a60af52-5c69-4e4f-92ea-b83d9e55f5e2",
+      "name": "Trello: tablero",
+      "credentials": {
+        "trelloApi": {
+          "id": "pMalmbsSuNQ1FKpX",
+          "name": "Trello account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "list",
+        "operation": "getAll",
+        "id": "={{ $(\"Configuración\").first().json.boardId }}",
+        "returnAll": true,
+        "additionalFields": {
+          "fields": "all"
+        }
+      },
+      "type": "n8n-nodes-base.trello",
+      "typeVersion": 1,
+      "position": [
+        448,
+        -192
+      ],
+      "id": "b58b1f3b-373a-4637-ad96-b756f35cbbca",
+      "name": "Trello: listas del tablero",
+      "credentials": {
+        "trelloApi": {
+          "id": "pMalmbsSuNQ1FKpX",
+          "name": "Trello account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const req = $(\"Normalizar entrada\").first().json;\nconst question = req.normalizedQuestion || '';\nconst lists = $input.all().map(item => item.json);\n\nconst normalize = (value = '') =>\n  String(value)\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '')\n    .toLowerCase()\n    .trim();\n\nconst q = normalize(question);\n\nconst explicitMatches = lists.filter(list => {\n  const name = normalize(list.name);\n  return name && q.includes(name);\n});\n\nconst semanticBuckets = [\n  {\n    keywords: ['pendiente', 'pendientes', 'backlog', 'por hacer', 'por-hacer', 'todo', 'to do', 'abierto', 'abierta', 'nueva', 'nuevas'],\n    listTerms: ['pendiente', 'backlog', 'por hacer', 'por-hacer', 'todo', 'to do', 'abierto', 'idea', 'ideas', 'nueva', 'nuevas'],\n  },\n  {\n    keywords: ['progreso', 'en progreso', 'haciendo', 'doing', 'curso', 'en curso', 'trabajando', 'actual'],\n    listTerms: ['progreso', 'doing', 'curso', 'trabajando', 'actual', 'desarrollo'],\n  },\n  {\n    keywords: ['finalizado', 'finalizadas', 'hecho', 'hechas', 'terminado', 'terminadas', 'done', 'cerrado', 'cerradas', 'completado', 'completadas'],\n    listTerms: ['final', 'done', 'hecho', 'terminado', 'cerrado', 'complet'],\n  },\n  {\n    keywords: ['bloqueado', 'bloqueadas', 'impedimento', 'impedimentos', 'blocked'],\n    listTerms: ['bloque', 'imped', 'blocked'],\n  },\n];\n\nlet semanticMatches = [];\nfor (const bucket of semanticBuckets) {\n  if (bucket.keywords.some(keyword => q.includes(keyword))) {\n    const matches = lists.filter(list => {\n      const name = normalize(list.name);\n      return bucket.listTerms.some(term => name.includes(term));\n    });\n    semanticMatches.push(...matches);\n  }\n}\n\nconst dedupe = (items) => {\n  const seen = new Set();\n  return items.filter(item => {\n    if (!item?.id || seen.has(item.id)) return false;\n    seen.add(item.id);\n    return true;\n  });\n};\n\nlet selected = dedupe([...explicitMatches, ...semanticMatches]);\n\nif (selected.length === 0) {\n  selected = lists;\n}\n\nreturn selected.map(list => ({\n  json: {\n    listId: list.id,\n    listName: list.name,\n    question: req.question,\n    normalizedQuestion: req.normalizedQuestion,\n    replyTarget: req.replyTarget,\n    isGroup: req.isGroup,\n    shouldRespond: req.shouldRespond,\n    originalQuestion: req.originalQuestion,\n    boardId: req.boardId,\n    allowedGroupJid: req.allowedGroupJid,\n  },\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        -192
+      ],
+      "id": "c6ff05e1-bded-4906-8df9-82833eef4411",
+      "name": "Preparar listas para tarjetas"
+    },
+    {
+      "parameters": {
+        "resource": "list",
+        "operation": "getCards",
+        "id": "={{ $json.listId }}",
+        "returnAll": true,
+        "additionalFields": {
+          "fields": "all"
+        }
+      },
+      "type": "n8n-nodes-base.trello",
+      "typeVersion": 1,
+      "position": [
+        896,
+        -192
+      ],
+      "id": "3e5cb68f-9767-4e60-8f6d-b986980151b9",
+      "name": "Trello: tarjetas de listas",
+      "alwaysOutputData": true,
+      "credentials": {
+        "trelloApi": {
+          "id": "pMalmbsSuNQ1FKpX",
+          "name": "Trello account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const req = $(\"Normalizar entrada\").first().json;\nconst board = $(\"Trello: tablero\").first()?.json || {};\nconst allLists = $(\"Trello: listas del tablero\").all().map(item => item.json);\nconst selectedLists = $(\"Preparar listas para tarjetas\").all().map(item => item.json);\nconst rawCards = $input.all().map(item => item.json).filter(card => card && Object.keys(card).length > 0);\n\nconst normalize = (value = '') =>\n  String(value)\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '')\n    .toLowerCase()\n    .trim();\n\nconst q = normalize(req.normalizedQuestion || req.question || '');\nconst boardName = board.name || 'tu tablero';\n\nconst listNameById = new Map(allLists.map(list => [list.id, list.name]));\nconst selectedListIds = new Set(selectedLists.map(list => list.listId));\n\nconst cards = rawCards.map(card => ({\n  ...card,\n  listName: listNameById.get(card.idList) || card.listName || 'Sin lista',\n}));\n\nconst cardsByListId = new Map();\nfor (const list of allLists) {\n  cardsByListId.set(list.id, []);\n}\nfor (const card of cards) {\n  if (!cardsByListId.has(card.idList)) {\n    cardsByListId.set(card.idList, []);\n  }\n  cardsByListId.get(card.idList).push(card);\n}\n\nconst totalCards = Array.from(cardsByListId.values()).reduce((acc, items) => acc + items.length, 0);\n\nfunction truncate(text, max = 180) {\n  const value = String(text || '').replace(/\\s+/g, ' ').trim();\n  if (!value) return '';\n  return value.length > max ? `${value.slice(0, max - 1)}…` : value;\n}\n\nfunction bullets(items, max = 12) {\n  return items.slice(0, max).map(item => `- ${item}`).join('\\n');\n}\n\nfunction numbered(items, max = 8) {\n  return items.slice(0, max).map((item, idx) => `${idx + 1}. ${item}`).join('\\n');\n}\n\nfunction formatDateES(dateValue) {\n  if (!dateValue) return '';\n  const date = new Date(dateValue);\n  if (Number.isNaN(date.getTime())) return '';\n  return date.toLocaleDateString('es-ES');\n}\n\nfunction uniqueById(items) {\n  const seen = new Set();\n  return items.filter(item => {\n    if (!item?.id || seen.has(item.id)) return false;\n    seen.add(item.id);\n    return true;\n  });\n}\n\nfunction formatCard(card) {\n  const parts = [card.name];\n\n  const labelNames = Array.isArray(card.labels)\n    ? card.labels.map(label => label.name || label.color).filter(Boolean)\n    : [];\n\n  if (labelNames.length) {\n    parts.push(`etiquetas: ${labelNames.slice(0, 3).join(', ')}`);\n  }\n\n  if (card.due) {\n    const due = formatDateES(card.due);\n    if (due) {\n      parts.push(`vence ${due}`);\n    }\n  }\n\n  if (card.closed) {\n    parts.push('cerrada');\n  }\n\n  return parts.join(' · ');\n}\n\nfunction buildCardDetails(card) {\n  const lines = [`La tarjeta \"${card.name}\" está en la lista \"${card.listName}\".`];\n\n  if (card.due) {\n    const due = formatDateES(card.due);\n    if (due) {\n      lines.push(`Vence el ${due}.`);\n    }\n  }\n\n  if (Array.isArray(card.labels) && card.labels.length) {\n    const labels = card.labels.map(label => label.name || label.color).filter(Boolean).slice(0, 8);\n    if (labels.length) {\n      lines.push(`Etiquetas: ${labels.join(', ')}.`);\n    }\n  }\n\n  if (card.desc) {\n    lines.push(`Descripción: ${truncate(card.desc, 220)}`);\n  }\n\n  const url = card.shortUrl || card.url;\n  if (url) {\n    lines.push(`Enlace: ${url}`);\n  }\n\n  return lines.join(' ');\n}\n\nfunction detectMatchedLists() {\n  const explicitMatches = allLists.filter(list => q.includes(normalize(list.name)));\n  if (explicitMatches.length) return explicitMatches;\n\n  const semantic = [];\n  const addMatches = (keywords, terms) => {\n    if (keywords.some(keyword => q.includes(keyword))) {\n      semantic.push(\n        ...allLists.filter(list => {\n          const name = normalize(list.name);\n          return terms.some(term => name.includes(term));\n        }),\n      );\n    }\n  };\n\n  addMatches(\n    ['pendiente', 'pendientes', 'backlog', 'por hacer', 'por-hacer', 'todo', 'to do', 'abierto', 'abierta'],\n    ['pendiente', 'backlog', 'por hacer', 'por-hacer', 'todo', 'to do', 'abierto', 'idea']\n  );\n  addMatches(\n    ['progreso', 'en progreso', 'haciendo', 'doing', 'curso', 'en curso', 'trabajando', 'actual'],\n    ['progreso', 'doing', 'curso', 'trabajando', 'actual', 'desarrollo']\n  );\n  addMatches(\n    ['finalizado', 'finalizadas', 'hecho', 'hechas', 'terminado', 'terminadas', 'done', 'cerrado', 'cerradas', 'completado', 'completadas'],\n    ['final', 'done', 'hecho', 'terminado', 'cerrado', 'complet']\n  );\n  addMatches(\n    ['bloqueado', 'bloqueadas', 'impedimento', 'impedimentos', 'blocked'],\n    ['bloque', 'imped', 'blocked']\n  );\n\n  return uniqueById(semantic);\n}\n\nfunction tokenize(text) {\n  return normalize(text)\n    .replace(/[^a-z0-9\\s]/g, ' ')\n    .split(/\\s+/)\n    .filter(Boolean);\n}\n\nfunction extractSearchTokens() {\n  const stopwords = new Set([\n    'dime','di','que','cual','cuales','el','la','los','las','un','una','unos','unas',\n    'de','del','al','y','o','en','por','para','con','sin','mi','mis','tu','tus','su','sus',\n    'tablero','board','lista','listas','tarjeta','tarjetas','card','cards','tarea','tareas',\n    'hay','tengo','tenemos','muestrame','muéstrame','ver','mostrar','ensename','enséñame',\n    'buscar','busca','encuentra','detalle','detalles','estado','general','trabajos','trabajo',\n    'pendiente','pendientes','progreso','finalizado','finalizadas','hecho','hechas','terminado','terminadas',\n    'bloqueado','bloqueadas','checklist','checklists','adjunto','adjuntos','miembro','miembros',\n    'nombre','nombres','exacto','exacta','sobre','quiero','favor','donde','dónde','esta','está',\n    'abre','abrir','link','enlace','url','lleva','llevame','llévame','ensena','enseña',\n    'numero','número','num','opcion','opción','opciones','resultado','resultados',\n    'etiqueta','etiquetas','fecha','fechas','vence','vencen','vencimiento','vencimientos',\n    'hoy','mañana','manana','ayer','semana','mes','esta','este','atrasadas','atrasados',\n    'ayuda','comandos','como','cómo'\n  ]);\n\n  let working = q;\n  for (const list of allLists) {\n    const listName = normalize(list.name);\n    if (listName) {\n      working = working.replace(listName, ' ');\n    }\n  }\n\n  return tokenize(working).filter(token => !stopwords.has(token) && token.length > 1);\n}\n\nfunction getDateKeywords(dateValue) {\n  if (!dateValue) return [];\n  const date = new Date(dateValue);\n  if (Number.isNaN(date.getTime())) return [];\n\n  const today = new Date();\n  const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());\n  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());\n  const diffDays = Math.round((target - startToday) / 86400000);\n\n  const parts = [\n    target.toLocaleDateString('es-ES'),\n    `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${String(target.getDate()).padStart(2, '0')}`,\n    String(target.getFullYear()),\n    String(target.getDate()),\n  ];\n\n  if (diffDays === 0) parts.push('hoy');\n  if (diffDays === 1) parts.push('mañana', 'manana');\n  if (diffDays === -1) parts.push('ayer');\n  if (diffDays >= 0 && diffDays <= 7) parts.push('esta semana');\n  if (diffDays > 7 && diffDays <= 31) parts.push('este mes');\n\n  return parts.map(normalize).filter(Boolean);\n}\n\nfunction cardSearchHaystack(card) {\n  const labels = Array.isArray(card.labels)\n    ? card.labels.map(label => `${normalize(label.name || '')} ${normalize(label.color || '')}`).join(' ')\n    : '';\n  const dueTerms = getDateKeywords(card.due).join(' ');\n  const basic = `${normalize(card.name)} ${normalize(card.desc || '')} ${normalize(card.listName || '')} ${labels} ${dueTerms}`;\n  return normalize(basic);\n}\n\nfunction filterByTokens(cardsToFilter, tokens) {\n  if (!tokens.length) return cardsToFilter;\n  return cardsToFilter\n    .map(card => {\n      const haystack = cardSearchHaystack(card);\n      const score = tokens.reduce((acc, token) => acc + (haystack.includes(token) ? 1 : 0), 0);\n      return { card, score };\n    })\n    .filter(item => item.score > 0)\n    .sort((a, b) => b.score - a.score || a.card.name.localeCompare(b.card.name))\n    .map(item => item.card);\n}\n\nfunction filterByLabels(cardsToFilter) {\n  const wantsLabels = /\\betiqueta\\b|\\betiquetas\\b/.test(q);\n  if (!wantsLabels) return cardsToFilter;\n\n  const tokens = extractSearchTokens();\n  if (!tokens.length) {\n    return cardsToFilter.filter(card => Array.isArray(card.labels) && card.labels.length > 0);\n  }\n\n  return cardsToFilter.filter(card => {\n    const labelText = Array.isArray(card.labels)\n      ? card.labels.map(label => `${normalize(label.name || '')} ${normalize(label.color || '')}`).join(' ')\n      : '';\n    return tokens.some(token => labelText.includes(token));\n  });\n}\n\nfunction filterByDates(cardsToFilter) {\n  const wantsToday = /\\bhoy\\b/.test(q);\n  const wantsTomorrow = /\\bmañana\\b|\\bmanana\\b/.test(q);\n  const wantsWeek = /\\besta semana\\b/.test(q);\n  const wantsMonth = /\\beste mes\\b/.test(q);\n  const wantsOverdue = /\\batrasad|\\bvencid/.test(q);\n  const wantsWithDate = /\\bcon fecha\\b|\\bfecha\\b|\\bfechas\\b|\\bvencimiento\\b|\\bvencen\\b|\\bvence\\b/.test(q);\n\n  if (!(wantsToday || wantsTomorrow || wantsWeek || wantsMonth || wantsOverdue || wantsWithDate)) {\n    return cardsToFilter;\n  }\n\n  const today = new Date();\n  const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());\n  const endWeek = new Date(startToday);\n  endWeek.setDate(endWeek.getDate() + 7);\n  const endMonth = new Date(startToday);\n  endMonth.setMonth(endMonth.getMonth() + 1);\n\n  return cardsToFilter.filter(card => {\n    if (!card.due) return false;\n    const due = new Date(card.due);\n    if (Number.isNaN(due.getTime())) return false;\n\n    const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());\n    const diffDays = Math.round((dueDay - startToday) / 86400000);\n\n    if (wantsToday) return diffDays === 0;\n    if (wantsTomorrow) return diffDays === 1;\n    if (wantsWeek) return dueDay >= startToday && dueDay <= endWeek;\n    if (wantsMonth) return dueDay >= startToday && dueDay <= endMonth;\n    if (wantsOverdue) return dueDay < startToday;\n    if (wantsWithDate) return true;\n    return true;\n  });\n}\n\nfunction getMemoryKey() {\n  return `${req.remoteJid || req.replyTarget}::${req.participant || 'grupo'}`;\n}\n\nfunction getStoredSearches() {\n  const store = $getWorkflowStaticData('global');\n  if (!store.cardSearches) {\n    store.cardSearches = {};\n  }\n  return store.cardSearches;\n}\n\nfunction saveSearchResults(results) {\n  const searches = getStoredSearches();\n  const key = getMemoryKey();\n  searches[key] = {\n    timestamp: Date.now(),\n    results: results.slice(0, 8).map(card => ({\n      id: card.id,\n      name: card.name,\n      listName: card.listName,\n      due: card.due || null,\n      desc: card.desc || '',\n      labels: Array.isArray(card.labels) ? card.labels : [],\n      shortUrl: card.shortUrl || '',\n      url: card.url || '',\n      closed: !!card.closed,\n    })),\n  };\n}\n\nfunction getSavedResultByIndex(index) {\n  const searches = getStoredSearches();\n  const key = getMemoryKey();\n  const memory = searches[key];\n\n  if (!memory || !Array.isArray(memory.results)) {\n    return { error: 'missing' };\n  }\n\n  const ageMs = Date.now() - Number(memory.timestamp || 0);\n  const maxAgeMs = 12 * 60 * 60 * 1000;\n  if (ageMs > maxAgeMs) {\n    delete searches[key];\n    return { error: 'expired' };\n  }\n\n  if (index < 1 || index > memory.results.length) {\n    return { error: 'out_of_range', total: memory.results.length };\n  }\n\n  return { card: memory.results[index - 1], total: memory.results.length };\n}\n\nfunction findNumberedFollowupIndex() {\n  const patterns = [\n    /\\b(?:abre|abrir|detalle|detalles|muestrame|muéstrame|ensename|enséñame|link|enlace|url|abreme|ábreme)\\s+(?:la|el)?\\s*(\\d{1,2})\\b/,\n    /\\b(?:la|el)\\s+(\\d{1,2})\\b/,\n    /^\\s*(\\d{1,2})\\s*$/\n  ];\n\n  for (const pattern of patterns) {\n    const match = q.match(pattern);\n    if (match) return Number(match[1]);\n  }\n  return null;\n}\n\nfunction buildHelpMessage() {\n  const whitelistLine = req.hasWhitelist\n    ? 'Solo responde a los usuarios incluidos en la lista blanca.'\n    : 'Ahora mismo responde a cualquier usuario del grupo autorizado.';\n\n  return [\n    'Comandos disponibles:',\n    '- tr tablero',\n    '- tr listas',\n    '- tr tarjetas de en progreso',\n    '- tr busca factura',\n    '- tr tarjetas con etiqueta urgente',\n    '- tr tarjetas que vencen hoy',\n    '- tr tarjetas en progreso con etiqueta urgente que vencen hoy',\n    '- tr abre la 2',\n    '',\n    'También puedes combinar filtros por lista + etiqueta + fecha.',\n    whitelistLine,\n  ].join('\\n');\n}\n\nfunction buildGuidedError() {\n  if (/\\betiqueta\\b|\\betiquetas\\b/.test(q) && /\\bfecha\\b|\\bfechas\\b|\\bhoy\\b|\\bmañana\\b|\\bmanana\\b|\\bsemana\\b|\\bmes\\b|\\bvence\\b|\\bvencen\\b/.test(q)) {\n    return 'No he encontrado resultados con esa combinación. Prueba algo como: tr tarjetas en progreso con etiqueta urgente que vencen hoy.';\n  }\n  if (/\\betiqueta\\b|\\betiquetas\\b/.test(q)) {\n    return 'No he encontrado resultados con esa etiqueta. Prueba algo como: tr tarjetas con etiqueta urgente.';\n  }\n  if (/\\bfecha\\b|\\bfechas\\b|\\bhoy\\b|\\bmañana\\b|\\bmanana\\b|\\bsemana\\b|\\bmes\\b|\\bvence\\b|\\bvencen\\b|\\batrasad|\\bvencid/.test(q)) {\n    return 'No he encontrado tarjetas para esa fecha. Prueba con: tr tarjetas que vencen hoy o tr tarjetas atrasadas.';\n  }\n  if (/\\blista\\b|\\blistas\\b|\\bprogreso\\b|\\bpendiente\\b|\\bhecho\\b|\\bfinalizado\\b/.test(q)) {\n    return 'No he encontrado esa lista o no hay tarjetas que coincidan. Prueba con: tr listas o tr tarjetas de en progreso.';\n  }\n  if (/\\bbusca\\b|\\btarjeta\\b|\\btarea\\b|\\bdetalle\\b/.test(q)) {\n    return 'No he encontrado esa tarjeta. Prueba con: tr busca [nombre de tarjeta].';\n  }\n  return 'No se puede realizar tu consulta en estos momentos. Prueba con tr ayuda para ver ejemplos.';\n}\n\nconst asksHelp = /^ayuda$|^help$|^comandos$|^que puedes hacer$|^qué puedes hacer$/.test(q) || /\\bayuda\\b|\\bcomandos\\b/.test(q);\nconst asksBoard = /\\b(tablero|board)\\b/.test(q);\nconst asksLists = /\\b(lista|listas|columnas|column)\\b/.test(q);\nconst asksCards = /\\b(tarjeta|tarjetas|card|cards|tarea|tareas|pendiente|pendientes|progreso|bloquead|finalizad|hech|terminad|detalle|detalles|etiqueta|etiquetas|fecha|fechas|vence|vencen)\\b/.test(q);\nconst asksCount = /\\b(cuantas|cuantos|cuántas|cuántos|numero|número|total|cuenta)\\b/.test(q);\nconst asksSummary = /\\b(resumen|estado|general|todo|todas|todas las|que hay|qué hay)\\b/.test(q);\nconst asksSpecificCard = /\\b(detalle|detalles|buscar|busca|encuentra|tarjeta|tarea|donde|dónde|esta|está|abre|abrir|link|enlace|url|lleva|llévame|enseña|enséñame)\\b/.test(q);\nconst asksLabels = /\\betiqueta\\b|\\betiquetas\\b/.test(q);\nconst asksDates = /\\bfecha\\b|\\bfechas\\b|\\bvence\\b|\\bvencen\\b|\\bvencimiento\\b|\\bhoy\\b|\\bmañana\\b|\\bmanana\\b|\\besta semana\\b|\\beste mes\\b|\\batrasad|\\bvencid/.test(q);\n\nlet output = '';\n\nif (!req.question) {\n  output = 'No se puede realizar tu consulta en estos momentos. Prueba con tr ayuda.';\n} else if (asksHelp) {\n  output = buildHelpMessage();\n} else {\n  const followupIndex = findNumberedFollowupIndex();\n\n  if (followupIndex !== null) {\n    const saved = getSavedResultByIndex(followupIndex);\n    if (saved.card) {\n      output = buildCardDetails(saved.card);\n    } else if (saved.error === 'missing') {\n      output = 'No tengo una búsqueda reciente guardada. Primero usa algo como tr busca [nombre de tarjeta] y luego dime tr abre la 2.';\n    } else if (saved.error === 'expired') {\n      output = 'La búsqueda anterior ha caducado. Vuelve a buscar la tarjeta y luego dime tr abre la 2.';\n    } else if (saved.error === 'out_of_range') {\n      output = `Solo tengo ${saved.total} resultado${saved.total === 1 ? '' : 's'} guardado${saved.total === 1 ? '' : 's'}.`;\n    }\n  } else if ((asksBoard || asksLists) && !asksCards) {\n    output = `El tablero se llama \"${boardName}\". Sus listas reales son: ${allLists.map(list => `\"${list.name}\"`).join(', ')}.`;\n  } else {\n    const matchedLists = detectMatchedLists();\n    const matchedListIds = new Set(matchedLists.map(list => list.id));\n\n    let workingCards = matchedLists.length\n      ? cards.filter(card => matchedListIds.has(card.idList))\n      : cards;\n\n    if (asksLabels) {\n      workingCards = filterByLabels(workingCards);\n    }\n\n    if (asksDates) {\n      workingCards = filterByDates(workingCards);\n    }\n\n    const tokens = extractSearchTokens();\n    if (tokens.length) {\n      const tokenFiltered = filterByTokens(workingCards, tokens);\n      if (tokenFiltered.length) {\n        workingCards = tokenFiltered;\n      }\n    }\n\n    workingCards = uniqueById(workingCards);\n\n    if (asksSpecificCard && tokens.length >= 1) {\n      if (workingCards.length === 1) {\n        output = buildCardDetails(workingCards[0]);\n      } else if (workingCards.length > 1) {\n        saveSearchResults(workingCards);\n        output = `He encontrado varias tarjetas que coinciden con tu búsqueda:\\n${numbered(workingCards.slice(0, 8).map(card => `${card.name} (${card.listName})`), 8)}\\n\\nAhora puedes decirme tr abre la 2, tr detalle de la 3 o tr enlace de la 1.`;\n      } else {\n        output = buildGuidedError();\n      }\n    } else if (asksLabels || asksDates) {\n      if (!workingCards.length) {\n        output = buildGuidedError();\n      } else if (asksCount) {\n        output = `He encontrado ${workingCards.length} tarjeta${workingCards.length === 1 ? '' : 's'} que coinciden con tu consulta en \"${boardName}\".`;\n      } else {\n        output = `He encontrado ${workingCards.length} tarjeta${workingCards.length === 1 ? '' : 's'} en \"${boardName}\":\\n${bullets(workingCards.map(formatCard), 15)}`;\n      }\n    } else if (matchedLists.length > 0 || asksCards || asksCount || asksSummary) {\n      if (matchedLists.length === 1 && !asksLabels && !asksDates && !tokens.length) {\n        const list = matchedLists[0];\n        const listCards = cardsByListId.get(list.id) || [];\n        if (asksCount) {\n          output = `En la lista \"${list.name}\" hay ${listCards.length} tarjeta${listCards.length === 1 ? '' : 's'}.`;\n        } else if (listCards.length === 0) {\n          output = `La lista \"${list.name}\" existe, pero ahora mismo no tiene tarjetas.`;\n        } else {\n          output = `En la lista \"${list.name}\" hay ${listCards.length} tarjeta${listCards.length === 1 ? '' : 's'}:\\n${bullets(listCards.map(formatCard), 15)}`;\n        }\n      } else if (matchedLists.length > 1 && !asksLabels && !asksDates && !tokens.length && (asksCount || asksSummary)) {\n        const summaryLines = matchedLists.map(list => {\n          const count = (cardsByListId.get(list.id) || []).length;\n          return `${list.name}: ${count}`;\n        });\n        output = `Resumen real del tablero \"${boardName}\":\\n${bullets(summaryLines, 20)}`;\n      } else if (workingCards.length) {\n        if (asksCount) {\n          output = `He encontrado ${workingCards.length} tarjeta${workingCards.length === 1 ? '' : 's'} que coinciden con tu consulta en \"${boardName}\".`;\n        } else {\n          output = `He encontrado ${workingCards.length} tarjeta${workingCards.length === 1 ? '' : 's'} en \"${boardName}\":\\n${bullets(workingCards.map(formatCard), 15)}`;\n        }\n      } else {\n        output = buildGuidedError();\n      }\n    } else {\n      output = buildGuidedError();\n    }\n  }\n}\n\nreturn [\n  {\n    json: {\n      number: req.replyTarget,\n      output,\n      boardName,\n      totalLists: allLists.length,\n      totalCards,\n      shouldSend: true,\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -192
+      ],
+      "id": "d9a57e22-aecb-4b61-a684-4fcc3f4ff836",
+      "name": "Construir respuesta"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.0.119:8282/message/sendText/ADDO%20v2",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $json.number}}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.output  }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1344,
+        -96
+      ],
+      "id": "ed6768f2-d209-4595-9527-df5eb521cf8c",
+      "name": "HTTP Request",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "0BTcqdurbeIAvpvG",
+          "name": "Header Auth account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar entrada": {
+      "main": [
+        [
+          {
+            "node": "¿Procesar mensaje?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trello: listas del tablero": {
+      "main": [
+        [
+          {
+            "node": "Preparar listas para tarjetas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar listas para tarjetas": {
+      "main": [
+        [
+          {
+            "node": "Trello: tarjetas de listas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trello: tarjetas de listas": {
+      "main": [
+        [
+          {
+            "node": "Construir respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construir respuesta": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Procesar mensaje?": {
+      "main": [
+        [
+          {
+            "node": "Trello: tablero",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Trello: listas del tablero",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "¿Avisar uso /tr?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aviso usar /tr": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Avisar uso /tr?": {
+      "main": [
+        [
+          {
+            "node": "Aviso usar /tr",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignorar mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configuración": {
+      "main": [
+        [
+          {
+            "node": "Normalizar entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "UslOMwwiH98sBT9V",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": {
+    "global": {
+      "cardSearches": {
+        "34644255770@s.whatsapp.net": {
+          "timestamp": 1776933242685,
+          "results": [
+            {
+              "id": "69e761bccf3b35de8d42a7ad",
+              "name": "CENTRO TRANSFUSION. CARTELES DOS MODELOS",
+              "listName": "OFFSET",
+              "due": null,
+              "desc": "",
+              "labels": [
+                {
+                  "id": "677fb152fd9de5fa84e138a9",
+                  "idBoard": "5ff2d7873b288c34fbc1b918",
+                  "idOrganization": "5ff2d6786e55256241df12f1",
+                  "name": "ESP. RESPUESTA CLIENTE",
+                  "nodeId": "ari:cloud:trello::label/workspace/5ff2d6786e55256241df12f1/677fb152fd9de5fa84e138a9",
+                  "color": "orange",
+                  "uses": 18
+                }
+              ],
+              "shortUrl": "https://trello.com/c/GOzXFcz3",
+              "url": "https://trello.com/c/GOzXFcz3/4237-centro-transfusion-carteles-dos-modelos",
+              "closed": false
+            },
+            {
+              "id": "69de23af1f9a8bc15c7dc41d",
+              "name": "AS. CRESPO. CARTERAS DOCUMENTACION",
+              "listName": "FABRICACION EXTERNO",
+              "due": null,
+              "desc": "",
+              "labels": [],
+              "shortUrl": "https://trello.com/c/FW6TL4Iv",
+              "url": "https://trello.com/c/FW6TL4Iv/4199-as-crespo-carteras-documentacion",
+              "closed": false
+            },
+            {
+              "id": "69e20eddd147e1ebaa3e83df",
+              "name": "HOSPITAL DR. PESET. REF. 813056 CUARTILLA CON MEMBRETE",
+              "listName": "TRABAJOS EN PROCESO",
+              "due": null,
+              "desc": "",
+              "labels": [],
+              "shortUrl": "https://trello.com/c/I34l4X9s",
+              "url": "https://trello.com/c/I34l4X9s/4222-hospital-dr-peset-ref-813056-cuartilla-con-membrete",
+              "closed": false
+            },
+            {
+              "id": "69d64032458261cf304a08c0",
+              "name": "PEREZ LLULL. LOTERIA 9 MODELOS",
+              "listName": "TRABAJOS EN PROCESO",
+              "due": null,
+              "desc": "",
+              "labels": [],
+              "shortUrl": "https://trello.com/c/nhfqgnyC",
+              "url": "https://trello.com/c/nhfqgnyC/4184-perez-llull-loteria-9-modelos",
+              "closed": false
+            },
+            {
+              "id": "69e72658f7e648e45579803e",
+              "name": "SALVADOR JUST. CARPETAS LOTESNA",
+              "listName": "ACABADO EXTERNO",
+              "due": null,
+              "desc": "",
+              "labels": [],
+              "shortUrl": "https://trello.com/c/wwcTHXIk",
+              "url": "https://trello.com/c/wwcTHXIk/4232-salvador-just-carpetas-lotesna",
+              "closed": false
+            },
+            {
+              "id": "698aef03b315b9956f1be574",
+              "name": "SPORTS MEDICINE CENTER. REVISTA",
+              "listName": "TRABAJOS EN PROCESO",
+              "due": null,
+              "desc": "",
+              "labels": [],
+              "shortUrl": "https://trello.com/c/hQiaVSzD",
+              "url": "https://trello.com/c/hQiaVSzD/3979-sports-medicine-center-revista",
+              "closed": false
+            },
+            {
+              "id": "69c25270d46ef40f8527359c",
+              "name": "AD LEVANTE. ALBARAN A4 CON PLECA",
+              "listName": "ROTATIVA",
+              "due": null,
+              "desc": "",
+              "labels": [],
+              "shortUrl": "https://trello.com/c/AM8Q6AiV",
+              "url": "https://trello.com/c/AM8Q6AiV/4131-ad-levante-albaran-a4-con-pleca",
+              "closed": false
+            },
+            {
+              "id": "69e8a300dfb9953829c43612",
+              "name": "ADDO. FLYER CAFETERIA PAULA",
+              "listName": "DIGITAL",
+              "due": null,
+              "desc": "",
+              "labels": [],
+              "shortUrl": "https://trello.com/c/PdleTMSO",
+              "url": "https://trello.com/c/PdleTMSO/4241-addo-flyer-cafeteria-paula",
+              "closed": false
+            }
+          ]
+        }
+      }
+    }
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "8236743a-deaf-4398-9e94-8863c032961c",
+  "activeVersionId": null,
+  "versionCounter": 226,
+  "triggerCount": 1,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-04-21T14:36:32.081Z",
+      "createdAt": "2026-04-21T14:36:32.081Z",
+      "role": "workflow:owner",
+      "workflowId": "hMiTLtodkZV8lpMr",
+      "projectId": "Oydmi9LKo6hnXrnp",
+      "project": {
+        "updatedAt": "2026-04-20T15:31:20.051Z",
+        "createdAt": "2026-04-20T15:12:06.805Z",
+        "id": "Oydmi9LKo6hnXrnp",
+        "name": "Ximo Soler <grafico@addoimpresores.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "3068be6c-0e51-439e-8bf9-e72776c398e1"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}
