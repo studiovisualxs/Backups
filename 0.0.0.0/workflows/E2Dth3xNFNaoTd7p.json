@@ -1,0 +1,171 @@
+{
+  "updatedAt": "2026-06-08T08:14:13.061Z",
+  "createdAt": "2026-06-07T11:29:57.836Z",
+  "id": "E2Dth3xNFNaoTd7p",
+  "name": "01_leer_ideas_nocodb",
+  "description": null,
+  "active": false,
+  "isArchived": true,
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -576,
+        -48
+      ],
+      "id": "a51bbdcd-0c1c-40a5-b1be-ab438d09b529",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "authentication": "nocoDbApiToken",
+        "operation": "getAll",
+        "workspaceId": "wajwltr8",
+        "projectId": "pbquv5sx87v3axz",
+        "table": "muyqz19cxvzkqoy",
+        "limit": 10,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.nocoDb",
+      "typeVersion": 3,
+      "position": [
+        -352,
+        -48
+      ],
+      "id": "29243c0a-7df7-4138-8e78-7b46618d5cd6",
+      "name": "NocoDB Token account",
+      "credentials": {
+        "nocoDbApiToken": {
+          "id": "rhqhDug16HoOy6fo",
+          "name": "NocoDB Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c5fd1153-cc7e-41fc-ba4e-4a72d0e12e92",
+              "leftValue": "={{ $json.Estado.toLowerCase() }}",
+              "rightValue": "idea",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -128,
+        -48
+      ],
+      "id": "def1be5d-c9a0-434c-ba1b-e4ae58cea3e7",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.0.119:11434/api/chat",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"qwen2.5:7b-instruct\",\n  \"stream\": false,\n  \"format\": \"json\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Eres un estratega de contenido para redes sociales. Devuelve siempre JSON válido, sin markdown, sin explicaciones y sin texto fuera del JSON.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Crea contenido para redes sociales en español.\\n\\nTema: {{$json.Tema}}\\nObjetivo: {{$json.Objetivo}}\\nPilar de contenido: {{$json.Pilar_contenido}}\\nPlataforma: {{$json.Plataforma}}\\n\\nDevuelve exactamente este JSON:\\n{\\n  \\\"caption_instagram\\\": \\\"texto para Instagram con tono cercano y claro\\\",\\n  \\\"post_linkedin\\\": \\\"post profesional para LinkedIn\\\",\\n  \\\"post_facebook\\\": \\\"post para Facebook más conversacional\\\",\\n  \\\"hashtags\\\": \\\"hashtags separados por espacios\\\",\\n  \\\"idea_visual\\\": \\\"idea sencilla para una imagen o carrusel\\\"\\n}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        112,
+        -192
+      ],
+      "id": "2b1c19b3-7ce8-4742-87e1-81802a66b6a1",
+      "name": "HTTP Request"
+    }
+  ],
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "NocoDB Token account",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "NocoDB Token account": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "328e6d4b-5956-4abd-92b1-1ecc72ed373a",
+  "activeVersionId": null,
+  "versionCounter": 34,
+  "triggerCount": 0,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-06-07T11:29:57.836Z",
+      "createdAt": "2026-06-07T11:29:57.836Z",
+      "role": "workflow:owner",
+      "workflowId": "E2Dth3xNFNaoTd7p",
+      "projectId": "Oydmi9LKo6hnXrnp",
+      "project": {
+        "updatedAt": "2026-04-20T15:31:20.051Z",
+        "createdAt": "2026-04-20T15:12:06.805Z",
+        "id": "Oydmi9LKo6hnXrnp",
+        "name": "Ximo Soler <grafico@addoimpresores.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "3068be6c-0e51-439e-8bf9-e72776c398e1"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}
