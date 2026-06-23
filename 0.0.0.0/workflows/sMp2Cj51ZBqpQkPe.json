@@ -1,0 +1,535 @@
+{
+  "updatedAt": "2026-06-23T17:48:23.285Z",
+  "createdAt": "2026-06-23T16:57:32.441Z",
+  "id": "sMp2Cj51ZBqpQkPe",
+  "name": "Addo - Emails clientes",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "19b349ac-9dad-4765-9c69-38d8c9e0176f",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -512,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1wvv8pbNuyXWeDGTNEC-w9tgMQ7ZRhUJ1QsRLS2gkEWE/edit?gid=0#gid=0",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Prueba",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1wvv8pbNuyXWeDGTNEC-w9tgMQ7ZRhUJ1QsRLS2gkEWE/edit#gid=0"
+        },
+        "options": {}
+      },
+      "id": "962dd024-a04a-4855-b2de-2c41eec9ebbb",
+      "name": "Leer clientes",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -256,
+        64
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "WqqKIfHDEaQErgAl",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.filter(item => {\n  const email = (item.json['Email público'] || '').toString().trim();\n  const estado = (item.json['Estado'] || '').toString().trim();\n\n  if (!email) return false;\n  if (email.toLowerCase() === 'no encontrado') return false;\n  if (estado) return false;\n\n  return true;\n});"
+      },
+      "id": "6ade30a9-fcf9-4d72-bfba-d6f6c3fa1c9b",
+      "name": "Filtrar pendientes con email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        16,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": 5
+      },
+      "id": "33a0384d-b5ea-4c97-bfc0-68bad60c23e9",
+      "name": "Limitar prueba a 1",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        272,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "asunto-email",
+              "name": "Asunto email",
+              "value": "=Propuesta de impresión para {{$json[\"Nombre\"]}}",
+              "type": "string"
+            },
+            {
+              "id": "texto-email",
+              "name": "Texto email",
+              "value": "=Hola,\n\nTe escribimos desde el departamento de Redes Sociales de Addo Impresores.\n\nHe visto {{$json[\"Nombre\"]}} y creo que podríamos ayudaros con {{$json[\"Servicio recomendado de Addo Impresores\"] || $json[\"Servicio recomendado\"]}}, etc...\n\nEn Addo trabajamos impresión digital, offset, rotativas, cartelería, flyers, tarjetas, vinilos, rotulación, etiquetas, catálogos y papelería corporativa para empresas de Valencia.\n\nPor vuestro tipo de negocio, {{$json[\"Motivo comercial\"]}}.\n\nSi os interesa, podemos prepararos una propuesta rápida o algunos ejemplos adaptados a vuestra empresa.\n\nUn saludo,\n\nDpto. Redes Sociales\nAddo Impresores\n",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "162b766a-6260-4876-b172-526672cf48cd",
+      "name": "Crear asunto y texto",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        528,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "studiovisual.xs@gmail.com",
+        "toEmail": "={{$json[\"Email público\"]}}",
+        "subject": "={{$json[\"Asunto email\"]}}",
+        "emailFormat": "text",
+        "text": "={{$json[\"Texto email\"]}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        736,
+        -96
+      ],
+      "id": "d8e2c20d-48bc-49df-8f61-72283f8c38eb",
+      "name": "Send an Email",
+      "webhookId": "ba46463d-440c-445e-bfd3-91d192896008",
+      "credentials": {
+        "smtp": {
+          "id": "7s7pTTjulVSpVWUt",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1136,
+        48
+      ],
+      "id": "e95229d9-9b5b-49f8-bd14-869401150662",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1wvv8pbNuyXWeDGTNEC-w9tgMQ7ZRhUJ1QsRLS2gkEWE",
+          "mode": "list",
+          "cachedResultName": "Clientes Addo Valencia",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1wvv8pbNuyXWeDGTNEC-w9tgMQ7ZRhUJ1QsRLS2gkEWE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Prueba",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1wvv8pbNuyXWeDGTNEC-w9tgMQ7ZRhUJ1QsRLS2gkEWE/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "row_number": "={{$json[\"row_number\"]}}",
+            "Estado": "Enviado",
+            "Fecha envío": "={{$now}}",
+            "Asunto email": "={{$json[\"Asunto email\"]}}",
+            "Mensaje ID": "={{$json[\"messageId\"]}}"
+          },
+          "matchingColumns": [
+            "row_number"
+          ],
+          "schema": [
+            {
+              "id": "Prioridad",
+              "displayName": "Prioridad",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Estado",
+              "displayName": "Estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Nombre",
+              "displayName": "Nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Sector",
+              "displayName": "Sector",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Ciudad",
+              "displayName": "Ciudad",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Web",
+              "displayName": "Web",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Teléfono público",
+              "displayName": "Teléfono público",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email público",
+              "displayName": "Email público",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Dirección",
+              "displayName": "Dirección",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Servicio recomendado de Addo Impresores",
+              "displayName": "Servicio recomendado de Addo Impresores",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Motivo comercial",
+              "displayName": "Motivo comercial",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "URL fuente",
+              "displayName": "URL fuente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Fecha envío",
+              "displayName": "Fecha envío",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Asunto email",
+              "displayName": "Asunto email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Texto email",
+              "displayName": "Texto email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Respuesta",
+              "displayName": "Respuesta",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Seguimiento",
+              "displayName": "Seguimiento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Notas",
+              "displayName": "Notas",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Mensaje ID",
+              "displayName": "Mensaje ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1328,
+        48
+      ],
+      "id": "b9c83181-1a9c-4e3b-9d7a-3ccf0c671155",
+      "name": "Update row in sheet",
+      "credentials": {
+        "googleApi": {
+          "id": "WqqKIfHDEaQErgAl",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 30
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        944,
+        -96
+      ],
+      "id": "dbf39c11-737c-4a68-85d0-49830d6b4ddb",
+      "name": "Wait",
+      "webhookId": "22b559fc-ef8f-4c44-8d0e-42701f67cd51"
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Leer clientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer clientes": {
+      "main": [
+        [
+          {
+            "node": "Filtrar pendientes con email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar pendientes con email": {
+      "main": [
+        [
+          {
+            "node": "Limitar prueba a 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limitar prueba a 1": {
+      "main": [
+        [
+          {
+            "node": "Crear asunto y texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear asunto y texto": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Send an Email": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "UslOMwwiH98sBT9V",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "42c4f191-e0a0-459f-90ff-86e2bc06c93c",
+  "activeVersionId": null,
+  "versionCounter": 70,
+  "triggerCount": 0,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-06-23T16:57:32.441Z",
+      "createdAt": "2026-06-23T16:57:32.441Z",
+      "role": "workflow:owner",
+      "workflowId": "sMp2Cj51ZBqpQkPe",
+      "projectId": "Oydmi9LKo6hnXrnp",
+      "project": {
+        "updatedAt": "2026-04-20T15:31:20.051Z",
+        "createdAt": "2026-04-20T15:12:06.805Z",
+        "id": "Oydmi9LKo6hnXrnp",
+        "name": "Ximo Soler <grafico@addoimpresores.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "3068be6c-0e51-439e-8bf9-e72776c398e1"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}
